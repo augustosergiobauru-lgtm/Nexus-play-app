@@ -1,0 +1,25 @@
+
+package app.opentv
+
+import android.util.Log
+
+object NexusConnectionTest {
+
+    fun testarConexao() {
+        NexusSupabase.get(
+            table = "channels",
+            onSuccess = { resultado ->
+                Log.d(
+                    "NEXUS_PLAY",
+                    "Conexão realizada: $resultado"
+                )
+            },
+            onError = { erro ->
+                Log.e(
+                    "NEXUS_PLAY",
+                    "Erro na conexão: $erro"
+                )
+            }
+        )
+    }
+}
