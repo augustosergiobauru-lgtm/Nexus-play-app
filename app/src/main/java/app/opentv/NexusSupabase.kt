@@ -3,39 +3,59 @@ package app.opentv
 
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import okhttp3.Response
+import java.io.IOException
 
 object NexusSupabase {
 
-    // Configuraremos os valores reais depois.
-    private const val SUPABASE_URL = ""
-    private const val SUPABASE_ANON_KEY = ""
+    private const val SUPABASE_URL =
+        "https://ypjajibbcyopkfrenibb.supabase.co"
+
+    private const val SUPABASE_ANON_KEY =
+        "sb_publishable_iU6tvWzwe5Ib0z6kOnyx6w_St2a663h"
 
     private val client = OkHttpClient()
 
-    suspend fun testarConexao(): Boolean =
-        withContext(Dispatchers.IO) {
-            if (SUPABASE_URL.isBlank() ||
-                SUPABASE_ANON_KEY.isBlank()
-            ) {
-                return@withContext false
-            }
+    fun get(
+        table: String,
+        onSuccess: (String) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        val url = "$SUPABASE_URL/rest/v1/$table?select=*"
 
-            try {
-                val request = Request.Builder()
-                    .url(
-                        "${SUPABASE_URL.trimEnd('/')}/rest/v1/"
-                    )
-                    .header("apikey", SUPABASE_ANON_KEY)
-                    .get()
-                    .build()
+        val request = Request.Builder()
+            .url(url)
+            .addHeader("apikey", SUPABASE_ANON_KEY)
+            .get()
+            .build()
 
-                client.newCall(request).execute().use {
-                    it.isSuccessful
+        client.newCall(request).enqueue(
+            object : okhttp3.Callback {
+
+                override fun onFailure(
+                    call: okhttp3.Call,
+                    e: IOException
+                ) {
+                    onError(e.message ?: "Erro de conexão")
                 }
-            } catch (e: Exception) {
-                false
+
+                override fun onResponse(
+                    call: okhttp3.Call,
+                    response: Response
+                ) {
+                    response.use {
+                        val body = it.body?.string().orEmpty()
+
+                        if (it.isSuccessful) {
+                            onSuccess(body)
+                        } else {
+                            onError(
+                                "HTTP ${it.code}: $body"
+                            )
+                        }
+                    }
+                }
             }
-        }
+        )
+    }
 }
