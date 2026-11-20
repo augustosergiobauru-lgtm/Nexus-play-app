@@ -1,5 +1,8 @@
 package app.opentv
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -57,6 +60,9 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
     val prefs = remember(session.userId) { context.getSharedPreferences("nexus_favorites_" + session.userId, android.content.Context.MODE_PRIVATE) }
     var favorites by remember(session.userId) { mutableStateOf(prefs.getStringSet("ids", emptySet())?.toSet() ?: emptySet()) }
     var favoritesOnly by remember { mutableStateOf(false) }
+    var recentOnly by remember { mutableStateOf(false) }
+    val watchHistory = remember(session.userId) { NexusWatchHistory(context, session.userId) }
+    var recentIds by remember(session.userId) { mutableStateOf(watchHistory.recent().map { it.id }.toSet()) }
     var seriesDetail by remember(session.userId) { mutableStateOf<NexusCatalog.Item?>(null) }
 
     val playbackAccess = remember { NexusSupabase.playbackAccess() }
@@ -105,7 +111,7 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
         error = null
         val generation = catalogGeneration
         val contentType = when (selected) { 1 -> "live"; 2 -> "movie"; 3 -> "series"; else -> null }
-        catalog.page(session, items.size, contentType = contentType, query = query, categoryId = if (selected == 1) liveCategoryId else null) { result ->
+        catalog.page(session, items.size, contentType = contentType, query = query, categoryId = if (selected == 1) liveCategoryId else null, itemIds = when { favoritesOnly -> favorites; recentOnly -> recentIds; else -> null }) { result ->
             handler.post {
                 if (active.get()) {
                     if (generation != catalogGeneration) return@post
@@ -118,7 +124,7 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
             }
         }
     }
-    LaunchedEffect(session, selected, query, liveCategoryId) {
+    LaunchedEffect(session, selected, query, liveCategoryId, favoritesOnly, recentOnly, if (favoritesOnly) favorites else emptySet<String>()) {
         catalogGeneration++
         items = emptyList()
         more = true
@@ -131,10 +137,11 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
     val currentPlayback = playingItem
     val currentUrl = playbackUrl
     if (currentPlayback != null && currentUrl != null) {
-        androidx.activity.compose.BackHandler { playingItem = null; playbackUrl = null }
+        androidx.activity.compose.BackHandler { playingItem = null; playbackUrl = null; recentIds = watchHistory.recent().map { it.id }.toSet() }
         NexusPlaybackScreen(session, currentPlayback, currentUrl) {
             playingItem = null
             playbackUrl = null
+            recentIds = watchHistory.recent().map { it.id }.toSet()
         }
         return
     }
@@ -149,8 +156,8 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
                     tabs.forEachIndexed { index, name ->
                         NavigationBarItem(
                             selected = selected == index,
-                            onClick = { selected = index; seriesDetail = null; favoritesOnly = false; query = "" },
-                            icon = { Text(listOf("⌂", "▣", "▶", "▤", "⋯")[index], fontSize = 20.sp) },
+                            onClick = { selected = index; seriesDetail = null; favoritesOnly = false; recentOnly = false; query = "" },
+                            icon = { Icon(listOf(Icons.Default.Home, Icons.Default.LiveTv, Icons.Default.Movie, Icons.Default.VideoLibrary, Icons.Default.MoreHoriz)[index], contentDescription = name) },
                             label = { Text(name, fontSize = 11.sp) },
                             colors = NavigationBarItemDefaults.colors(selectedIconColor = gold, selectedTextColor = gold, indicatorColor = Color(0xFF332A16), unselectedIconColor = Color.Gray, unselectedTextColor = Color.Gray)
                         )
@@ -159,9 +166,9 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
             }
         ) { padding ->
             Column(
-                Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp, vertical = 12.dp)
+                Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp, vertical = 6.dp)
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(18.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 val detail = seriesDetail
                 if (detail != null) {
@@ -181,10 +188,10 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
                     return@Column
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    NexusBrandMark(Modifier.size(36.dp))
+                    NexusBrandMark(Modifier.size(28.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("NEXUS PLAY", color = gold, fontSize = 23.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                    TextButton(onClick = { selected = 4 }) { Text("☰", color = gold, fontSize = 22.sp) }
+                    Text("NEXUS PLAY", color = gold, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    IconButton(onClick = { selected = 4 }) { Icon(Icons.Default.Settings, contentDescription = "Configurações", tint = gold) }
                 }
                 if (playbackBusy) {
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = gold)
@@ -193,22 +200,20 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
                 playbackError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 if (selected != 0) Text(tabs[selected], style = MaterialTheme.typography.headlineSmall)
                 if (selected == 0) {
-                    Box(Modifier.fillMaxWidth().height(210.dp).background(Brush.verticalGradient(listOf(Color(0xFF302717), Color(0xFF101010))), RoundedCornerShape(16.dp)).padding(18.dp), contentAlignment = Alignment.BottomStart) {
-                        Column { Text("DESTAQUES", color = gold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            Text(items.firstOrNull()?.title ?: "Seu entretenimento em um só lugar", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                            Text(if (items.isEmpty()) "Catálogo aguardando conteúdo" else "Explore o catálogo", color = Color.LightGray)
-                        }
-                    }
-                }
-                if (selected == 0) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("Ao Vivo", "Filmes", "Séries", "Favoritos").forEachIndexed { index, label ->
-                            Column(Modifier.weight(1f).background(Color(0xFF191919), RoundedCornerShape(12.dp))
-                                .clickable { selected = if (index == 3) 1 else index + 1; favoritesOnly = index == 3; query = "" }
-                                .padding(vertical = 14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(listOf("▣", "▶", "▤", "★")[index], color = gold, fontSize = 25.sp)
-                                Spacer(Modifier.height(6.dp))
-                                Text(label, color = Color.White, fontSize = 11.sp)
+                    Text("O que vamos assistir?", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    Text("Seu entretenimento em um só lugar", color = Color.Gray, fontSize = 13.sp)
+                    listOf(listOf(1, 2), listOf(3, 4)).forEach { shortcuts ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            shortcuts.forEach { shortcut ->
+                                val label = when (shortcut) { 1 -> "Ao Vivo"; 2 -> "Filmes"; 3 -> "Séries"; else -> "Favoritos" }
+                                val symbol = when (shortcut) { 1 -> Icons.Default.LiveTv; 2 -> Icons.Default.Movie; 3 -> Icons.Default.VideoLibrary; else -> Icons.Default.Star }
+                                Column(Modifier.weight(1f).height(112.dp)
+                                    .background(Brush.linearGradient(listOf(Color(0xFF302717), Color(0xFF151515))), RoundedCornerShape(16.dp))
+                                    .clickable { selected = if (shortcut == 4) 1 else shortcut; favoritesOnly = shortcut == 4; recentOnly = false; query = "" }
+                                    .padding(16.dp), verticalArrangement = Arrangement.SpaceBetween) {
+                                    Icon(symbol, contentDescription = null, tint = gold, modifier = Modifier.size(30.dp))
+                                    Text(label, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                                }
                             }
                         }
                     }
@@ -222,11 +227,13 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
                 }
                 if (selected in 1..3) {
                     OutlinedTextField(value = query, onValueChange = { query = it },
-                        label = { Text("Pesquisar") }, singleLine = true, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth())
+                        placeholder = { Text("Buscar no catálogo") }, leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) }, singleLine = true, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp))
                     if (selected == 1) {
                         Box {
                             OutlinedButton(onClick = { categoryMenu = true }, modifier = Modifier.fillMaxWidth()) {
-                                Text(liveCategories.firstOrNull { it.id == liveCategoryId }?.name ?: "Todas as categorias ▾")
+                                Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text(liveCategories.firstOrNull { it.id == liveCategoryId }?.name ?: "Todas as categorias", maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                             DropdownMenu(expanded = categoryMenu, onDismissRequest = { categoryMenu = false },
                                 modifier = Modifier.heightIn(max = 420.dp)) {
@@ -246,25 +253,36 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
                         else -> setOf("series", "episode")
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(selected = !favoritesOnly, onClick = { favoritesOnly = false }, label = { Text("Todos") })
-                        FilterChip(selected = favoritesOnly, onClick = { favoritesOnly = true }, label = { Text("Favoritos") })
+                        FilterChip(selected = !favoritesOnly && !recentOnly, onClick = { favoritesOnly = false; recentOnly = false }, label = { Text("Todos") }, colors = nexusChipColors(gold))
+                        FilterChip(selected = favoritesOnly, onClick = { favoritesOnly = true; recentOnly = false }, label = { Text("Favoritos") }, leadingIcon = { Icon(Icons.Default.Star, null, Modifier.size(16.dp)) }, colors = nexusChipColors(gold))
+                        FilterChip(selected = recentOnly, onClick = { recentOnly = true; favoritesOnly = false }, label = { Text("Recentes") }, colors = nexusChipColors(gold))
+                    }
+                    if (selected == 1) {
+                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            liveCategories.forEach { category ->
+                                FilterChip(selected = liveCategoryId == category.id,
+                                    onClick = { liveCategoryId = if (liveCategoryId == category.id) null else category.id },
+                                    label = { Text(category.name, maxLines = 1) }, colors = nexusChipColors(gold))
+                            }
+                        }
                     }
                     val visible = items.filter { (!favoritesOnly || it.id in favorites) && it.type.lowercase() in accepted && it.title.contains(query, ignoreCase = true) }
                     visible.forEach { item ->
                         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF151515))) {
-                            Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                                Box(Modifier.size(44.dp).background(Color(0xFF302717), RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
-                                    Text(if (selected == 1) "▣" else "▶", color = gold, fontSize = 22.sp)
+                            Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).clickable(enabled = !playbackBusy) { play(item) }.padding(horizontal = 10.dp, vertical = 4.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                                Box(Modifier.size(36.dp).background(Color(0xFF302717), RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
+                                    if (!item.logoUrl.isNullOrBlank()) coil.compose.AsyncImage(model = item.logoUrl, contentDescription = null, modifier = Modifier.size(32.dp))
+                                    else Icon(if (selected == 1) Icons.Default.LiveTv else Icons.Default.PlayArrow, contentDescription = null, tint = gold, modifier = Modifier.size(22.dp))
                                 }
-                                Text(item.title, Modifier.weight(1f).clickable(enabled = !playbackBusy) { play(item) }.padding(12.dp), color = Color.White)
-                                TextButton(onClick = {
+                                Text(item.title, Modifier.weight(1f).padding(horizontal = 10.dp), color = Color.White, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                IconButton(onClick = {
                                     favorites = if (item.id in favorites) favorites - item.id else favorites + item.id
                                     prefs.edit().putStringSet("ids", favorites.toSet()).apply()
-                                }) { Text(if (item.id in favorites) "★" else "☆", color = gold, fontSize = 24.sp) }
+                                }) { Icon(if (item.id in favorites) Icons.Default.Star else Icons.Default.StarBorder, contentDescription = if (item.id in favorites) "Remover dos favoritos" else "Adicionar aos favoritos", tint = gold, modifier = Modifier.size(22.dp)) }
                             }
                         }
                     }
-                    if (visible.isEmpty() && !loading) Text("Nenhum resultado nesta página. Use a pesquisa, escolha uma categoria ou carregue mais.")
+                    if (visible.isEmpty() && !loading) Text("Nenhum conteúdo encontrado. Tente outra categoria ou busca.")
                     if (loading) CircularProgressIndicator()
                     error?.let { Text(it) }
                     if (more && !loading) Button(onClick = { loadPage() }) { Text("Carregar mais") }
@@ -302,3 +320,9 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
         }
     }
 }
+
+@Composable
+private fun nexusChipColors(gold: Color) = FilterChipDefaults.filterChipColors(
+    selectedContainerColor = Color(0xFF332A16), selectedLabelColor = gold,
+    selectedLeadingIconColor = gold, labelColor = Color.LightGray
+)
