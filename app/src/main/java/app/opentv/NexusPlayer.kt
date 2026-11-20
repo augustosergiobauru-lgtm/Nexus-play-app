@@ -63,8 +63,8 @@ fun NexusPlayer(authorizedUrl: String, modifier: Modifier = Modifier, resumePosi
                         Icon(if (session.playing) Icons.Default.Pause else Icons.Default.PlayArrow,
                             if (session.playing) "Pausar" else "Reproduzir", tint = gold)
                     }
-                    IconButton(onClick = { session.seek(session.position - 15_000L) }, enabled = session.seekable) { Icon(Icons.Default.Replay10, "Voltar 15 segundos") }
-                    IconButton(onClick = { session.seek(session.position + 15_000L) }, enabled = session.seekable) { Icon(Icons.Default.Forward10, "Avançar 15 segundos") }
+                    IconButton(onClick = { session.seek(session.position - 15_000L) }, enabled = session.seekable) { Icon(Icons.Default.FastRewind, "Voltar 15 segundos") }
+                    IconButton(onClick = { session.seek(session.position + 15_000L) }, enabled = session.seekable) { Icon(Icons.Default.FastForward, "Avançar 15 segundos") }
                     Text(if (isLive) "AO VIVO" else timeLabel(session.position), Modifier.weight(1f), style = MaterialTheme.typography.labelSmall)
                     IconButton(onClick = session::toggleMute) { Icon(if (session.muted) Icons.Default.VolumeOff else Icons.Default.VolumeUp, "Ativar ou silenciar áudio") }
                     IconButton(onClick = { panel = "Opções" }) { Icon(Icons.Default.Settings, "Opções de reprodução") }

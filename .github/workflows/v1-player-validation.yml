@@ -7,6 +7,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: v1-player-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   playback:
     runs-on: ubuntu-latest

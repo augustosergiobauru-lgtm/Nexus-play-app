@@ -165,6 +165,7 @@ internal class NexusPlayback(
                 vlc = p
                 p.setVolume(if (muted) 0 else 100)
                 val token = generation
+                p.setUseOrientationFromBounds(true)
                 p.attachViews(layout, null, true, false)
                 p.setEventListener { event ->
                     if (!released && generation == token) when (event.type) {
