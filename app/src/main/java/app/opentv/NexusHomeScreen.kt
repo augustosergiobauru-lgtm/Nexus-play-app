@@ -38,6 +38,20 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
     val catalog = remember { NexusSupabase.catalog() }
     val handler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
     var items by remember(session) { mutableStateOf(emptyList<NexusCatalog.Item>()) }
+    var liveCategories by remember { mutableStateOf(emptyList<NexusCatalog.Category>()) }
+    var liveCategoryId by remember { mutableStateOf<String?>(null) }
+    var categoryMenu by remember { mutableStateOf(false) }
+    var categoryError by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(session) {
+        catalog.liveCategories(session) { result ->
+            handler.post {
+                result.fold(
+                    onSuccess = { liveCategories = it; categoryError = null },
+                    onFailure = { categoryError = "Não foi possível carregar as categorias de canais." }
+                )
+            }
+        }
+    }
     var query by remember { mutableStateOf("") }
     val context = androidx.compose.ui.platform.LocalContext.current
     val prefs = remember(session.userId) { context.getSharedPreferences("nexus_favorites_" + session.userId, android.content.Context.MODE_PRIVATE) }
@@ -91,7 +105,7 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
         error = null
         val generation = catalogGeneration
         val contentType = when (selected) { 1 -> "live"; 2 -> "movie"; 3 -> "series"; else -> null }
-        catalog.page(session, items.size, contentType = contentType, query = query) { result ->
+        catalog.page(session, items.size, contentType = contentType, query = query, categoryId = if (selected == 1) liveCategoryId else null) { result ->
             handler.post {
                 if (active.get()) {
                     if (generation != catalogGeneration) return@post
@@ -104,7 +118,7 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
             }
         }
     }
-    LaunchedEffect(session, selected, query) {
+    LaunchedEffect(session, selected, query, liveCategoryId) {
         catalogGeneration++
         items = emptyList()
         more = true
@@ -209,6 +223,23 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
                 if (selected in 1..3) {
                     OutlinedTextField(value = query, onValueChange = { query = it },
                         label = { Text("Pesquisar") }, singleLine = true, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth())
+                    if (selected == 1) {
+                        Box {
+                            OutlinedButton(onClick = { categoryMenu = true }, modifier = Modifier.fillMaxWidth()) {
+                                Text(liveCategories.firstOrNull { it.id == liveCategoryId }?.name ?: "Todas as categorias ▾")
+                            }
+                            DropdownMenu(expanded = categoryMenu, onDismissRequest = { categoryMenu = false },
+                                modifier = Modifier.heightIn(max = 420.dp)) {
+                                DropdownMenuItem(text = { Text("Todas as categorias") },
+                                    onClick = { liveCategoryId = null; categoryMenu = false })
+                                liveCategories.forEach { category ->
+                                    DropdownMenuItem(text = { Text(category.name) },
+                                        onClick = { liveCategoryId = category.id; categoryMenu = false })
+                                }
+                            }
+                        }
+                        categoryError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                    }
                     val accepted = when (selected) {
                         1 -> setOf("live", "channel", "tv")
                         2 -> setOf("movie", "film", "vod")
@@ -233,7 +264,7 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
                             }
                         }
                     }
-                    if (visible.isEmpty() && !loading) Text("Nenhum título encontrado nesta página.")
+                    if (visible.isEmpty() && !loading) Text("Nenhum resultado nesta página. Use a pesquisa, escolha uma categoria ou carregue mais.")
                     if (loading) CircularProgressIndicator()
                     error?.let { Text(it) }
                     if (more && !loading) Button(onClick = { loadPage() }) { Text("Carregar mais") }
