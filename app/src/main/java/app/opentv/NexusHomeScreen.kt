@@ -95,7 +95,7 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(18.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("△", color = gold, fontSize = 32.sp)
+                    Text("▷N", color = gold, fontSize = 26.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.width(8.dp))
                     Text("NEXUS PLAY", color = gold, fontSize = 23.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                     TextButton(onClick = { selected = 4 }) { Text("☰", color = gold, fontSize = 22.sp) }
@@ -131,22 +131,28 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
                 }
                 if (selected in 1..3) {
                     OutlinedTextField(value = query, onValueChange = { query = it },
-                        label = { Text("Pesquisar títulos carregados") }, modifier = Modifier.fillMaxWidth())
+                        label = { Text("Pesquisar") }, singleLine = true, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth())
                     val accepted = when (selected) {
                         1 -> setOf("live", "channel", "tv")
                         2 -> setOf("movie", "film", "vod")
                         else -> setOf("series", "episode")
                     }
-                    Row { TextButton(onClick = { favoritesOnly = !favoritesOnly }) { Text(if (favoritesOnly) "Mostrar todos" else "Mostrar favoritos") } }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(selected = !favoritesOnly, onClick = { favoritesOnly = false }, label = { Text("Todos") })
+                        FilterChip(selected = favoritesOnly, onClick = { favoritesOnly = true }, label = { Text("Favoritos") })
+                    }
                     val visible = items.filter { (!favoritesOnly || it.id in favorites) && it.type.lowercase() in accepted && it.title.contains(query, ignoreCase = true) }
                     visible.forEach { item ->
-                        Card(Modifier.fillMaxWidth()) {
+                        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF151515))) {
                             Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                                Text(item.title, Modifier.weight(1f).padding(8.dp))
+                                Box(Modifier.size(44.dp).background(Color(0xFF302717), RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
+                                    Text(if (selected == 1) "▣" else "▶", color = gold, fontSize = 22.sp)
+                                }
+                                Text(item.title, Modifier.weight(1f).padding(12.dp), color = Color.White)
                                 TextButton(onClick = {
                                     favorites = if (item.id in favorites) favorites - item.id else favorites + item.id
                                     prefs.edit().putStringSet("ids", favorites.toSet()).apply()
-                                }) { Text(if (item.id in favorites) "★" else "☆") }
+                                }) { Text(if (item.id in favorites) "★" else "☆", color = gold, fontSize = 24.sp) }
                             }
                         }
                     }
