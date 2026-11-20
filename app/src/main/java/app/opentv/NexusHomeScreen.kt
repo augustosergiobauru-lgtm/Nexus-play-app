@@ -227,7 +227,7 @@ fun NexusHomeScreen(
         Scaffold(
             containerColor = Color(0xFF080808),
             bottomBar = {
-                NavigationBar(containerColor = Color(0xFF101010)) {
+                NavigationBar(containerColor = Color(0xFF101010), modifier = Modifier.height(64.dp)) {
                     tabs.forEachIndexed { index, name ->
                         NavigationBarItem(
                             selected = selected == index,
@@ -266,7 +266,7 @@ fun NexusHomeScreen(
                     NexusBrandMark(Modifier.size(36.dp))
                     Spacer(Modifier.width(8.dp))
                     Text("NEXUS PLAY", color = gold, fontSize = 23.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                    IconButton(onClick = { selected = 4 }) { Icon(Icons.Filled.Menu, "Menu", tint = gold) }
+                    IconButton(onClick = { selected = 4 }, modifier = Modifier.size(36.dp)) { Icon(Icons.Filled.Menu, "Menu", tint = gold) }
                 }
                 if (playbackBusy) {
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = gold)

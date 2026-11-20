@@ -61,7 +61,7 @@ internal fun NexusHomeDashboard(
     val pager = rememberPagerState(pageCount = { highlights.size })
     HorizontalPager(state = pager, key = { highlights[it].id }, modifier = Modifier.fillMaxWidth().testTag("home-highlights")) { index ->
         val item = highlights[index]
-        Box(Modifier.fillMaxWidth().height(if (landscape) 196.dp else 340.dp)
+        Box(Modifier.fillMaxWidth().height(if (landscape) 124.dp else 340.dp)
             .clip(RoundedCornerShape(16.dp)).background(Color(0xFF1B1A17))) {
             AsyncImage(model = item.logoUrl, contentDescription = null,
                 contentScale = ContentScale.Crop, alignment = Alignment.TopCenter,
@@ -70,20 +70,20 @@ internal fun NexusHomeDashboard(
                 Color(0xFF0C0C0C), Color(0xFF0C0C0C).copy(alpha = .94f),
                 Color(0xFF0C0C0C).copy(alpha = .34f), Color.Transparent))))
             Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xFF0C0C0C).copy(alpha = .8f)))))
-            Column(Modifier.fillMaxHeight().fillMaxWidth(if (landscape) .57f else .88f).padding(20.dp),
+            Column(Modifier.fillMaxHeight().fillMaxWidth(if (landscape) .60f else .88f).padding(if (landscape) 14.dp else 20.dp),
                 verticalArrangement = Arrangement.Center) {
                 Text(if (item.type == "series") "SÉRIE EM DESTAQUE" else "FILME EM DESTAQUE",
                     color = HomeGold, fontSize = 10.sp, letterSpacing = 2.sp, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(8.dp))
-                Text(homeTitle(item), color = Color.White, fontSize = if (landscape) 27.sp else 30.sp,
-                    lineHeight = if (landscape) 30.sp else 34.sp, fontWeight = FontWeight.Bold,
-                    maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("featured-title-$index"))
+                Spacer(Modifier.height(if (landscape) 5.dp else 8.dp))
+                Text(homeTitle(item), color = Color.White, fontSize = if (landscape) 22.sp else 30.sp,
+                    lineHeight = if (landscape) 25.sp else 34.sp, fontWeight = FontWeight.Bold,
+                    maxLines = if (landscape) 1 else 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("featured-title-$index"))
                 if (!item.synopsis.isNullOrBlank()) {
                     Spacer(Modifier.height(6.dp))
                     Text(item.synopsis, color = Color(0xFFD0D0D0), fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
-                Spacer(Modifier.height(12.dp))
-                Button(onClick = { onOpen(item) }, enabled = !busy,
+                Spacer(Modifier.height(if (landscape) 7.dp else 12.dp))
+                Button(onClick = { onOpen(item) }, enabled = !busy, modifier = if (landscape) Modifier.height(34.dp) else Modifier,
                     shape = RoundedCornerShape(8.dp), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = HomeGold, contentColor = Color.Black)) {
                     Icon(Icons.Filled.PlayArrow, null, modifier = Modifier.size(19.dp))
@@ -112,13 +112,13 @@ internal fun NexusHomeDashboard(
         if (entries.isNotEmpty()) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(title, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                TextButton(onClick = { onBrowse(tab) }) { Text("Ver todos  ›", color = HomeGold, fontSize = 12.sp) }
+                TextButton(onClick = { onBrowse(tab) }, modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)) { Text("Ver todos  ›", color = HomeGold, fontSize = 12.sp) }
             }
             LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth().testTag("home-rail-$tab")) {
                 items(entries.take(24), key = { it.id }) { entry ->
-                    Column(Modifier.width(if (landscape) 100.dp else 118.dp).clickable(enabled = !busy) { onOpen(entry) }) {
+                    Column(Modifier.width(if (landscape) 128.dp else 118.dp).clickable(enabled = !busy) { onOpen(entry) }) {
                         AsyncImage(model = entry.logoUrl, contentDescription = homeTitle(entry), contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxWidth().height(if (landscape) 140.dp else 166.dp)
+                            modifier = Modifier.fillMaxWidth().height(if (landscape) 88.dp else 166.dp)
                                 .clip(RoundedCornerShape(9.dp)).background(Color(0xFF202020)))
                         Text(homeTitle(entry), color = Color(0xFFDEDEDE), fontSize = 11.sp, lineHeight = 15.sp,
                             maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
