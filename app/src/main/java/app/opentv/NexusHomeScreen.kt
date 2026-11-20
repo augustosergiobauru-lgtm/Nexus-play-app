@@ -95,7 +95,7 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(18.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("▷N", color = gold, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                    NexusBrandMark(Modifier.size(36.dp))
                     Spacer(Modifier.width(8.dp))
                     Text("NEXUS PLAY", color = gold, fontSize = 23.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                     TextButton(onClick = { selected = 4 }) { Text("☰", color = gold, fontSize = 22.sp) }
