@@ -56,14 +56,18 @@ class HomeVisualTest {
             }
             assertTrue("Catalog artwork did not load", result is SuccessResult)
         }
-        rule.activityRule.scenario.onActivity { it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
-        rule.waitForIdle()
         rule.activityRule.scenario.onActivity { activity ->
             activity.setContent {
                 NexusHomeScreen(NexusAuth.Session("fixture-only", "", "visual-fixture"), {}, NexusCatalog("https://catalog.invalid", "fixture", client))
             }
         }
         rule.waitUntil(15000) { rule.onAllNodesWithTag("home-highlights").fetchSemanticsNodes().isNotEmpty() }
+        // Replace the login composition first: its disposal restores the login orientation.
+        rule.activityRule.scenario.onActivity { it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
+        rule.waitUntil(10000) {
+            rule.activity.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+        }
+        rule.waitForIdle()
         rule.onNodeWithTag("featured-title-0").assertTextEquals(movie.getString("title"))
         rule.onNodeWithText("Conteúdo em breve").assertDoesNotExist()
         rule.onNodeWithTag("home-rail-2").assertExists()
