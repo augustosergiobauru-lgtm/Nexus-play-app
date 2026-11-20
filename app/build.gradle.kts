@@ -152,6 +152,9 @@ dependencies {
     // back in-app over the network. Pure-Java SMB2/3, no native bits.
     implementation("com.hierynomus:smbj:0.12.2")
 
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test:rules:1.6.1")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")

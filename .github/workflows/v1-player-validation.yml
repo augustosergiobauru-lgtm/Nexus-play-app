@@ -28,6 +28,8 @@ jobs:
           sudo udevadm trigger --name-match=kvm
       - name: Compile APK and run unit tests
         run: ./gradlew testDebugUnitTest assembleDebug assembleDebugAndroidTest --stacktrace
+      - name: Prepare screenshot directory
+        run: mkdir -p home-screenshots
       - name: Exercise Exo and VLC on public MP4 and HLS
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -35,7 +37,14 @@ jobs:
           arch: x86_64
           profile: pixel_2
           disable-animations: true
-          script: ./gradlew connectedDebugAndroidTest --stacktrace
+          script: ./gradlew connectedDebugAndroidTest --stacktrace && adb pull /sdcard/Download/nexus-home-landscape.png home-screenshots/
+      - name: Upload home screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nexus-Home-Screenshot
+          path: home-screenshots/
+          if-no-files-found: ignore
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:

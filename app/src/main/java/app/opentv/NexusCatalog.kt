@@ -6,9 +6,12 @@ import org.json.JSONArray
 import java.io.IOException
 
 /** Metadata only; playback URLs are intentionally excluded. */
-class NexusCatalog(private val projectUrl: String, private val publishableKey: String) {
+class NexusCatalog(
+    private val projectUrl: String,
+    private val publishableKey: String,
+    private val client: OkHttpClient = OkHttpClient.Builder().followRedirects(false).followSslRedirects(false).build()
+) {
     data class Item(val id: String, val title: String, val type: String, val categoryId: String?, val logoUrl: String? = null, val synopsis: String? = null)
-    private val client = OkHttpClient.Builder().followRedirects(false).followSslRedirects(false).build()
 
     data class Category(val id: String, val name: String)
     fun liveCategories(session: NexusAuth.Session, callback: (Result<List<Category>>) -> Unit) {
@@ -34,20 +37,24 @@ class NexusCatalog(private val projectUrl: String, private val publishableKey: S
         })
     }
 
-    fun page(session: NexusAuth.Session, offset: Int = 0, contentType: String? = null, query: String = "", categoryId: String? = null, recentlyAdded: Boolean = false, callback: (Result<List<Item>>) -> Unit) {
+    fun page(session: NexusAuth.Session, offset: Int = 0, contentType: String? = null, query: String = "", categoryId: String? = null, recentlyAdded: Boolean = false, pageSize: Int = 100, callback: (Result<List<Item>>) -> Unit) {
         try {
-            require(offset >= 0)
+            require(offset >= 0 && pageSize in 1..100)
             val base = (projectUrl.trimEnd('/') + "/rest/v1/channels").toHttpUrl()
             require(base.isHttps)
             require(contentType == null || contentType in setOf("live", "movie", "series"))
             val builder = base.newBuilder()
-                .addQueryParameter("select", "*")
+                .addQueryParameter("select", "id,title,content_type,category_id,logo_url")
                 .addQueryParameter("is_active", "eq.true")
                 .addQueryParameter("order", if (recentlyAdded) "created_at.desc,id.desc" else "title.asc,id.asc")
-                .addQueryParameter("limit", "100")
+                .addQueryParameter("limit", pageSize.toString())
                 .addQueryParameter("offset", offset.toString())
             categoryId?.let { builder.addQueryParameter("category_id", "eq.$it") }
-            contentType?.let { builder.addQueryParameter("content_type", "eq.$it") }
+            contentType?.let { builder.addQueryParameter("content_kind", "eq.$it") }
+            if (recentlyAdded && contentType == "series") {
+                // Home shows one entry per show, rather than dozens of episodes of the same show.
+                builder.addQueryParameter("title", "imatch. S0?1E0?1([^0-9]|$)")
+            }
             val search = query.trim().take(100).replace("*", "").replace("%", "").replace("_", "")
             if (search.isNotEmpty()) builder.addQueryParameter("title", "ilike.%$search%")
             val url = builder.build()
