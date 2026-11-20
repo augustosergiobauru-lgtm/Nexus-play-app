@@ -9,6 +9,8 @@ import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Alignment
@@ -50,8 +52,8 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
     var homeLoading by remember { mutableStateOf(true) }
     DisposableEffect(session) {
         val alive = java.util.concurrent.atomic.AtomicBoolean(true)
-        var pending = 3
-        listOf("live", "movie", "series").forEach { type ->
+        var pending = 2
+        listOf("movie", "series").forEach { type ->
             catalog.page(session, contentType = type, recentlyAdded = type != "live") { result ->
                 handler.post {
                     if (alive.get()) {
@@ -211,32 +213,6 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
     androidx.activity.compose.BackHandler(enabled = showLive && liveExpanded) { liveExpanded = false }
     NexusLiveImmersive(showLive && liveExpanded)
     Row(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding()) {
-        if (showLive) {
-            Column(if (liveExpanded) Modifier.fillMaxSize() else Modifier.fillMaxHeight().weight(1f).padding(8.dp)) {
-                Box(Modifier.fillMaxWidth().weight(1f).background(Color.Black)) {
-                    liveVideo()
-                    if (liveExpanded) {
-                        Surface(Modifier.align(Alignment.TopStart).padding(8.dp), color = Color.Black.copy(alpha = .7f)) {
-                            IconButton(onClick = { liveExpanded = false }) {
-                                Icon(androidx.compose.material.icons.Icons.Filled.ArrowBack, "Voltar ao mini player", tint = gold)
-                            }
-                        }
-                    }
-                    Surface(Modifier.align(Alignment.TopEnd).padding(8.dp), color = Color.Black.copy(alpha = .7f)) {
-                        IconButton(onClick = { liveExpanded = !liveExpanded }) {
-                            androidx.compose.material3.Icon(
-                                if (liveExpanded) androidx.compose.material.icons.Icons.Filled.FullscreenExit
-                                else androidx.compose.material.icons.Icons.Filled.Fullscreen,
-                                if (liveExpanded) "Voltar ao mini player" else "Tela cheia", tint = gold)
-                        }
-                    }
-                }
-                if (!liveExpanded) {
-                    Text(currentPlayback?.title.orEmpty(), color = gold, modifier = Modifier.padding(8.dp))
-                    Text("Toque novamente no canal para tela cheia", color = Color.LightGray, fontSize = 12.sp)
-                }
-            }
-        }
         if (!showLive || !liveExpanded) Box(if (showLive) Modifier.weight(1f).fillMaxHeight() else Modifier.fillMaxSize()) {
     MaterialTheme(colorScheme = darkColorScheme(
         primary = gold, onPrimary = Color.Black,
@@ -277,7 +253,7 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
                     Text("Episódios", color = gold, fontWeight = FontWeight.Bold)
                     Text("Temporadas e episódios ainda não disponíveis no catálogo.", color = Color.LightGray)
                     Text("Sobre", color = gold, fontWeight = FontWeight.Bold)
-                    Text("Sinopse não disponível.", color = Color.LightGray)
+                    Text(detail.synopsis ?: "Sinopse não disponível no catálogo.", color = Color.LightGray)
                     return@Column
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -293,43 +269,61 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
                 playbackError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 if (selected != 0) Text(tabs[selected], style = MaterialTheme.typography.headlineSmall)
                 if (selected == 0) {
-                    val featured = homeItems.firstOrNull { it.type == "movie" && !it.logoUrl.isNullOrBlank() }
-                        ?: homeItems.firstOrNull { it.type == "series" && !it.logoUrl.isNullOrBlank() }
-                        ?: homeItems.firstOrNull { it.type in setOf("movie", "series") }
-                    if (featured != null) {
-                        Box(Modifier.fillMaxWidth().height(196.dp).clip(RoundedCornerShape(16.dp))
-                            .background(Color(0xFF171717))) {
-                            if (!featured.logoUrl.isNullOrBlank()) {
-                                coil.compose.AsyncImage(model = featured.logoUrl, contentDescription = null,
-                                    contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                            }
-                            Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(
-                                Color(0xFF080808).copy(alpha = .96f), Color(0xFF080808).copy(alpha = .72f),
-                                Color(0xFF080808).copy(alpha = .12f)))))
-                            Column(Modifier.fillMaxHeight().fillMaxWidth(.7f).padding(20.dp),
-                                verticalArrangement = Arrangement.Center) {
-                                Text("EM DESTAQUE", color = gold, fontSize = 10.sp, fontWeight = FontWeight.Medium)
-                                Spacer(Modifier.height(8.dp))
-                                Text(featured.title, color = Color.White, fontSize = 25.sp,
-                                    fontWeight = FontWeight.Bold, maxLines = 2,
-                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                                Spacer(Modifier.height(6.dp))
-                                Text("Novidades para sua próxima sessão", color = Color(0xFFD0D0D0), fontSize = 12.sp)
-                                Spacer(Modifier.height(10.dp))
-                                Button(enabled = !playbackBusy,
-                                    onClick = { if (featured.type == "series") { selected = 3; seriesDetail = featured } else play(featured) },
-                                    shape = RoundedCornerShape(8.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black)) {
-                                    Text(if (featured.type == "series") "Ver série" else "Assistir")
+                    val movies = homeItems.filter { it.type == "movie" }.take(6)
+                    val series = homeItems.filter { it.type == "series" }.take(6)
+                    val highlights = (0 until maxOf(movies.size, series.size)).flatMap { index ->
+                        listOfNotNull(movies.getOrNull(index), series.getOrNull(index))
+                    }
+                    if (highlights.isNotEmpty()) {
+                        val pager = rememberPagerState(pageCount = { highlights.size })
+                        HorizontalPager(state = pager, modifier = Modifier.fillMaxWidth(), key = { highlights[it].id }) { index ->
+                            val featured = highlights[index]
+                            Box(Modifier.fillMaxWidth().height(238.dp).clip(RoundedCornerShape(16.dp))
+                                .background(Color(0xFF171717))) {
+                                if (!featured.logoUrl.isNullOrBlank()) {
+                                    coil.compose.AsyncImage(model = featured.logoUrl, contentDescription = null,
+                                        contentScale = ContentScale.Crop, alignment = Alignment.CenterEnd,
+                                        modifier = Modifier.fillMaxHeight().fillMaxWidth(.58f).align(Alignment.CenterEnd))
+                                }
+                                Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(
+                                    Color(0xFF080808), Color(0xFF080808).copy(alpha = .88f),
+                                    Color(0xFF080808).copy(alpha = .08f)))))
+                                Column(Modifier.fillMaxHeight().fillMaxWidth(.65f).padding(20.dp),
+                                    verticalArrangement = Arrangement.Center) {
+                                    Text(if (featured.type == "series") "SÉRIE EM DESTAQUE" else "FILME EM DESTAQUE",
+                                        color = gold, fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                                    Spacer(Modifier.height(8.dp))
+                                    Text(featured.title, color = Color.White, fontSize = 25.sp,
+                                        fontWeight = FontWeight.Bold, maxLines = 2,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                    Spacer(Modifier.height(8.dp))
+                                    Text(featured.synopsis ?: "Sinopse não disponível no catálogo.",
+                                        color = Color(0xFFD0D0D0), fontSize = 12.sp, maxLines = 2,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                    Spacer(Modifier.height(10.dp))
+                                    Button(enabled = !playbackBusy,
+                                        onClick = { if (featured.type == "series") { selected = 3; seriesDetail = featured } else play(featured) },
+                                        shape = RoundedCornerShape(8.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black)) {
+                                        Text(if (featured.type == "series") "Ver série" else "Assistir")
+                                    }
                                 }
                             }
                         }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                            highlights.indices.forEach { index ->
+                                Box(Modifier.padding(3.dp).size(if (pager.currentPage == index) 7.dp else 5.dp)
+                                    .clip(RoundedCornerShape(50)).background(if (pager.currentPage == index) gold else Color.DarkGray))
+                            }
+                        }
+                    } else if (!homeLoading) {
+                        Text("Filmes e séries aparecerão aqui quando estiverem disponíveis no catálogo.", color = Color.LightGray)
                     }
                     if (homeLoading) LinearProgressIndicator(Modifier.fillMaxWidth(), color = gold)
                     if (homeFailed) Text("Parte do catálogo não pôde ser carregada. Abra a categoria para tentar novamente.", color = Color.LightGray)
                 }
                 val sections = when (selected) {
-                    0 -> listOf("Filmes • Lançamentos", "Séries • Lançamentos", "Ao vivo")
+                    0 -> listOf("Filmes • Novidades", "Séries • Novidades")
                     1 -> listOf("Categorias", "Favoritos", "Recentes")
                     2 -> listOf("Categorias de filmes", "Favoritos")
                     3 -> listOf("Categorias de séries", "Favoritos")
@@ -388,20 +382,20 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
                         Spacer(Modifier.height(6.dp))
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, color = Color.White, fontWeight = FontWeight.Bold)
-                            TextButton(onClick = { selected = when (title) { "Ao vivo" -> 1; "Filmes • Lançamentos" -> 2; else -> 3 } }) { Text("Ver todos", color = gold) }
+                            TextButton(onClick = { selected = when (title) { "Ao vivo" -> 1; "Filmes • Novidades" -> 2; else -> 3 } }) { Text("Ver todos", color = gold) }
                         }
                         if (title != "Ao vivo") Text("Adicionados recentemente ao catálogo", color = Color(0xFF909090), fontSize = 11.sp)
                         val types = when(title) {
                             "Ao vivo" -> setOf("live", "channel", "tv")
-                            "Filmes • Lançamentos" -> setOf("movie", "film", "vod")
-                            "Séries • Lançamentos" -> setOf("series", "episode")
+                            "Filmes • Novidades" -> setOf("movie", "film", "vod")
+                            "Séries • Novidades" -> setOf("series", "episode")
                             else -> emptySet()
                         }
                         val entries = homeItems.filter { it.type.lowercase() in types }.take(10)
                         if (entries.isEmpty()) Text(if (types.isEmpty()) "Nenhuma reprodução recente" else "Conteúdo em breve", color = Color.Gray, fontSize = 13.sp)
                         else Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                             entries.forEach { entry ->
-                                Column(Modifier.width(if (title == "Ao vivo") 120.dp else 118.dp).clickable(enabled = !playbackBusy) { play(entry) }) {
+                                Column(Modifier.width(118.dp).clickable(enabled = !playbackBusy) { if (entry.type == "series") { selected = 3; seriesDetail = entry } else play(entry) }) {
                                     NexusCatalogArtwork(entry, Modifier.fillMaxWidth().height(if (title == "Ao vivo") 64.dp else 162.dp), contain = title == "Ao vivo")
                                     Text(entry.title, Modifier.padding(top = 5.dp), color = Color.White, fontSize = 12.sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                                 }
@@ -422,6 +416,32 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
             }
         }
     }
+        }
+        if (showLive) {
+            Column(if (liveExpanded) Modifier.fillMaxSize() else Modifier.fillMaxHeight().weight(1f).padding(8.dp)) {
+                Box(Modifier.fillMaxWidth().weight(1f).background(Color.Black)) {
+                    liveVideo()
+                    if (liveExpanded) {
+                        Surface(Modifier.align(Alignment.TopStart).padding(8.dp), color = Color.Black.copy(alpha = .7f)) {
+                            IconButton(onClick = { liveExpanded = false }) {
+                                Icon(androidx.compose.material.icons.Icons.Filled.ArrowBack, "Voltar ao mini player", tint = gold)
+                            }
+                        }
+                    }
+                    Surface(Modifier.align(Alignment.TopEnd).padding(8.dp), color = Color.Black.copy(alpha = .7f)) {
+                        IconButton(onClick = { liveExpanded = !liveExpanded }) {
+                            androidx.compose.material3.Icon(
+                                if (liveExpanded) androidx.compose.material.icons.Icons.Filled.FullscreenExit
+                                else androidx.compose.material.icons.Icons.Filled.Fullscreen,
+                                if (liveExpanded) "Voltar ao mini player" else "Tela cheia", tint = gold)
+                        }
+                    }
+                }
+                if (!liveExpanded) {
+                    Text(currentPlayback?.title.orEmpty(), color = gold, modifier = Modifier.padding(8.dp))
+                    Text("Toque novamente no canal para tela cheia", color = Color.LightGray, fontSize = 12.sp)
+                }
+            }
         }
     }
 }
