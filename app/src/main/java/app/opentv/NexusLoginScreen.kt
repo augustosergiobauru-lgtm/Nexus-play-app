@@ -40,7 +40,7 @@ fun NexusLoginScreen(
             Column(Modifier.widthIn(max = 420.dp).fillMaxWidth().verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("▷N", color = gold, fontSize = 64.sp, fontWeight = FontWeight.Bold)
+                NexusBrandMark(Modifier.size(96.dp))
                 Text("NEXUS PLAY", color = gold, fontSize = 32.sp, fontWeight = FontWeight.Bold)
                 Text("Entre na sua conta", color = Color.White)
                 OutlinedTextField(value = email, onValueChange = { email = it },
@@ -74,5 +74,28 @@ fun NexusLoginScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun NexusBrandMark(modifier: Modifier = Modifier) {
+    androidx.compose.foundation.Canvas(modifier) {
+        val gold = Color(0xFFE5C465)
+        val w = size.width
+        val h = size.height
+        val mark = androidx.compose.ui.graphics.Path().apply {
+            moveTo(w * 0.12f, h * 0.84f)
+            lineTo(w * 0.12f, h * 0.16f)
+            lineTo(w * 0.68f, h * 0.72f)
+            lineTo(w * 0.68f, h * 0.18f)
+        }
+        drawPath(mark, gold, style = androidx.compose.ui.graphics.drawscope.Stroke(width = w * 0.095f, cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+        val play = androidx.compose.ui.graphics.Path().apply {
+            moveTo(w * 0.77f, h * 0.32f)
+            lineTo(w * 0.98f, h * 0.5f)
+            lineTo(w * 0.77f, h * 0.68f)
+            close()
+        }
+        drawPath(play, gold)
     }
 }
