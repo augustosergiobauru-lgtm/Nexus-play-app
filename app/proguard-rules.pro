@@ -56,3 +56,7 @@
 -dontwarn org.slf4j.**
 -dontwarn org.ietf.jgss.**
 -dontwarn javax.security.**
+
+# LibVLC Java classes are called from native JNI code.
+-keep class org.videolan.libvlc.** { *; }
+-keep class org.videolan.** { *; }
