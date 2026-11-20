@@ -1,5 +1,6 @@
 
 import {parseM3U,sha256} from './parser.mjs';
+import {serverURL,readSource,loadXtream} from './source.mjs';
 const headers={'Content-Type':'application/json','Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type','Access-Control-Allow-Methods':'POST,OPTIONS'};
 const reply=(status,data)=>new Response(JSON.stringify(data),{status,headers});
 export async function handle(req){
@@ -27,29 +28,47 @@ export async function handle(req){
   playlistId=body.playlist_id;
   const list=await api('/rest/v1/playlists?select=id,source_url&id=eq.'+playlistId);
   if(!list.length)return reply(404,{error:'PLAYLIST_NOT_FOUND'});
+  if(body.action==='configure_xtream'){
+   const config=body.xtream;
+   if(!config||typeof config.username!=='string'||typeof config.password!=='string'||!config.username||!config.password||typeof body.authorization_reference!=='string'||body.authorization_reference.length<12)return reply(400,{error:'INVALID_XTREAM_CONFIGURATION'});
+   const configuredSource=serverURL(config.server,config.allow_insecure_http===true).href;
+   await api('/rest/v1/playlists?id=eq.'+playlistId,{method:'PATCH',body:JSON.stringify({source_url:configuredSource,status:'draft',last_error:null})});
+   await api('/rest/v1/m3u_xtream_sources?on_conflict=playlist_id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates'},body:JSON.stringify({playlist_id:playlistId,source_url:configuredSource,username:config.username,password:config.password,allow_insecure_http:config.allow_insecure_http===true,updated_at:new Date().toISOString()})});
+   await api('/rest/v1/m3u_authorizations?on_conflict=playlist_id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates'},body:JSON.stringify({playlist_id:playlistId,source_url_hash:await sha256(configuredSource),evidence:body.authorization_reference,approved_by:user.id,approved_at:new Date().toISOString()})});
+   return reply(200,{configured:true,source_kind:'xtream'});
+  }
   const source=list[0].source_url;
   const approvals=await api('/rest/v1/m3u_authorizations?select=source_url_hash&playlist_id=eq.'+playlistId);
   if(approvals[0]?.source_url_hash!==await sha256(source))return reply(409,{error:'SOURCE_NOT_AUTHORIZED'});
+  const configs=await api('/rest/v1/m3u_xtream_sources?select=source_url,username,password,allow_insecure_http&playlist_id=eq.'+playlistId);
+  const config=configs[0];
+  if(config&&config.source_url!==source)return reply(409,{error:'SOURCE_CONFIGURATION_CHANGED'});
   const url=new URL(source);
-  if(url.protocol!=='https:'||url.username||url.password)return reply(422,{error:'HTTPS_SOURCE_REQUIRED'});
+  if(url.username||url.password||!['https:','http:'].includes(url.protocol)||url.protocol==='http:'&&!config?.allow_insecure_http)return reply(422,{error:'HTTP_REQUIRES_EXPLICIT_APPROVAL'});
   // DNS resolution prevents fetching local/private hosts. Redirects are refused.
   const addresses=[...await Deno.resolveDns(url.hostname,'A').catch(()=>[]),...await Deno.resolveDns(url.hostname,'AAAA').catch(()=>[])];
   const privateIP=ip=>ip.includes(':')?/^(::|fc|fd|fe80|ff)/i.test(ip)||ip.includes('.'): /^(0\.|10\.|127\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|22[4-9]\.|23\d\.|24\d\.|25[0-5]\.)/.test(ip);
   if(!addresses.length||addresses.some(privateIP))return reply(422,{error:'PUBLIC_SOURCE_REQUIRED'});
-  const sourceResponse=await fetch(source,{redirect:'manual',signal:AbortSignal.timeout(20000)});
-  if(!sourceResponse.ok)throw Error('SOURCE_HTTP_'+sourceResponse.status);
-  const reader=sourceResponse.body.getReader(),chunks=[];let size=0;
-  while(true){const part=await reader.read();if(part.done)break;size+=part.value.length;if(size>16*1024*1024){await reader.cancel();throw Error('SOURCE_TOO_LARGE');}chunks.push(part.value);}
-  const bytes=new Uint8Array(size);let pos=0;for(const c of chunks){bytes.set(c,pos);pos+=c.length;}
-  const text=new TextDecoder().decode(bytes),fingerprint=await sha256(text);
+
+  let parsed,fingerprint;
+  if(config){
+   parsed=await loadXtream(source,config,body.section??'live',body.series_index??0);
+   fingerprint=parsed.fingerprint;
+  }else{
+   const text=await readSource(source);
+   parsed=parseM3U(text,source);
+   fingerprint=await sha256(text);
+  }
   if(offset>0&&body.fingerprint!==fingerprint)return reply(409,{error:'SOURCE_CHANGED_RESTART'});
-  const parsed=parseM3U(text,source);
-  if(offset>=parsed.rows.length)return reply(400,{error:'OFFSET_OUT_OF_RANGE'});
-  const batch=parsed.rows.slice(offset,offset+limit),next=offset+batch.length,done=next===parsed.rows.length;
-  const result=await api('/rest/v1/rpc/import_m3u_batch',{method:'POST',body:JSON.stringify({p_playlist_id:playlistId,p_fingerprint:fingerprint,p_offset:offset,p_items:batch,p_done:done})});
-  return reply(200,{...result,total:parsed.rows.length,processed:batch.length,invalid:parsed.invalid,duplicates:parsed.duplicates,fingerprint,next_offset:done?null:next,done});
+  if(offset>parsed.rows.length||offset===parsed.rows.length&&parsed.rows.length>0)return reply(400,{error:'OFFSET_OUT_OF_RANGE'});
+  const batch=parsed.rows.slice(offset,offset+limit),next=offset+batch.length,pageDone=next===parsed.rows.length;
+  const done=pageDone&&(!config||parsed.nextSection===null);
+  let result={inserted:0,updated:0,replayed:false};
+  if(batch.length)result=await api('/rest/v1/rpc/import_m3u_batch',{method:'POST',body:JSON.stringify({p_playlist_id:playlistId,p_fingerprint:fingerprint,p_offset:offset,p_items:batch,p_done:done})});
+  else if(done)await api('/rest/v1/playlists?id=eq.'+playlistId,{method:'PATCH',body:JSON.stringify({status:'active',last_import_at:new Date().toISOString(),last_check_at:new Date().toISOString(),health_status:'online',last_error:null})});
+  return reply(200,{...result,source_kind:config?'xtream':'m3u',total:parsed.rows.length,processed:batch.length,invalid:parsed.invalid,duplicates:parsed.duplicates,fingerprint,next_offset:pageDone?null:next,section:config?parsed.section:null,series_index:config?parsed.seriesIndex:null,next_section:config?(pageDone?parsed.nextSection:parsed.section):null,next_series_index:config?(pageDone?parsed.nextSeriesIndex:parsed.seriesIndex):null,done});
  }catch(e){
-  const known=/^(SOURCE_HTTP_\d+|DATABASE_HTTP_\d+|SOURCE_TOO_LARGE|INVALID_M3U|EMPTY_M3U|HLS_MANIFEST_NOT_CATALOG)$/;
+  const known=/^(SOURCE_HTTP_\d+|DATABASE_HTTP_\d+|SOURCE_TOO_LARGE|INVALID_M3U|EMPTY_M3U|HLS_MANIFEST_NOT_CATALOG|XTREAM_[A-Z_]+|INVALID_XTREAM_[A-Z_]+|HTTP_REQUIRES_EXPLICIT_APPROVAL)$/;
   const code=known.test(e.message)?e.message:'IMPORT_FAILED';
   if(playlistId)try{await api('/rest/v1/playlists?id=eq.'+playlistId,{method:'PATCH',body:JSON.stringify({status:'error',last_error:code,last_check_at:new Date().toISOString()})});}catch{}
   return reply(422,{error:code});
