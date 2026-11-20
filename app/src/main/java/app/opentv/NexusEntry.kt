@@ -55,7 +55,10 @@ fun NexusEntry() {
     }
     val current = session
     if (current == null) {
-        NexusLoginRoute(auth = auth, onAuthenticated = { store.save(it.refreshToken); session = it })
+        NexusLoginRoute(auth = auth, onAuthenticated = { authenticated, rememberLogin ->
+            if (rememberLogin) store.save(authenticated.refreshToken) else store.clear()
+            session = authenticated
+        })
     } else {
         var preview by remember(current) { mutableStateOf(false) }
         var approved by remember(current) { mutableStateOf(false) }
