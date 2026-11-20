@@ -28,6 +28,8 @@ jobs:
           sudo udevadm trigger --name-match=kvm
       - name: Compile APK and run unit tests
         run: ./gradlew testDebugUnitTest assembleDebug assembleDebugAndroidTest --stacktrace
+      - name: Prepare screenshot directory
+        run: mkdir -p home-screenshots
       - name: Exercise Exo and VLC on public MP4 and HLS
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -35,12 +37,7 @@ jobs:
           arch: x86_64
           profile: pixel_2
           disable-animations: true
-          script: ./gradlew connectedDebugAndroidTest --stacktrace
-      - name: Collect home screenshot
-        if: always()
-        run: |
-          mkdir -p home-screenshots
-          adb pull /sdcard/Android/data/app.opentv.debug/files/home-landscape.png home-screenshots/ || true
+          script: ./gradlew connectedDebugAndroidTest --stacktrace && adb pull /sdcard/Android/data/app.opentv.debug/files/home-landscape.png home-screenshots/
       - name: Upload home screenshot
         if: always()
         uses: actions/upload-artifact@v4
