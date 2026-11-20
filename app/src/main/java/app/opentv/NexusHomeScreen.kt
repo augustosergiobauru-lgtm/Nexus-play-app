@@ -1,5 +1,8 @@
 package app.opentv
 
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -75,26 +78,46 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
         active.set(true)
         onDispose { active.set(false); playbackCall?.cancel() }
     }
+    var liveExpanded by remember { mutableStateOf(false) }
+    var requestedLiveId by remember { mutableStateOf<String?>(null) }
+    var playbackGeneration by remember { mutableStateOf(0) }
     fun play(item: NexusCatalog.Item) {
-        if (playbackBusy) return
+        val live = item.type.lowercase() in setOf("live", "channel", "tv")
+        if (live) {
+            selected = 1
+            if (requestedLiveId == item.id) {
+                liveExpanded = true
+                return
+            }
+            requestedLiveId = item.id
+            liveExpanded = false
+        } else {
+            requestedLiveId = null
+        }
+        playbackCall?.cancel()
+        val generation = ++playbackGeneration
         playbackBusy = true
         playbackError = null
         try {
             val installation = NexusInstallation.identifier(context)
             playbackCall = playbackAccess.resolve(session, item.id, installation) { result ->
                 handler.post {
-                    if (active.get()) {
+                    if (active.get() && generation == playbackGeneration) {
                         playbackBusy = false
                         result.fold(onSuccess = { url ->
                             playbackUrl = url
                             playingItem = item
                         }, onFailure = {
+                            requestedLiveId = null
+                            liveExpanded = false
                             playbackError = it.message ?: "Não foi possível abrir o conteúdo."
                         })
                     }
                 }
             }
         } catch (_: Exception) {
+            requestedLiveId = null
+            liveExpanded = false
             playbackBusy = false
             playbackError = "Não foi possível identificar ou autorizar este aparelho."
         }
@@ -130,7 +153,8 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
     androidx.activity.compose.BackHandler(enabled = seriesDetail != null) { seriesDetail = null }
     val currentPlayback = playingItem
     val currentUrl = playbackUrl
-    if (currentPlayback != null && currentUrl != null) {
+    val livePlayback = currentPlayback?.type?.lowercase() in setOf("live", "channel", "tv")
+    if (currentPlayback != null && currentUrl != null && !livePlayback) {
         androidx.activity.compose.BackHandler { playingItem = null; playbackUrl = null }
         NexusPlaybackScreen(session, currentPlayback, currentUrl) {
             playingItem = null
@@ -138,6 +162,58 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
         }
         return
     }
+    // Move the same player composition between preview and fullscreen without reopening the stream.
+    val liveVideo = remember(currentPlayback?.id, currentUrl) {
+        movableContentOf {
+            if (currentPlayback != null && currentUrl != null && livePlayback) {
+                val history = remember(session.userId) { NexusWatchHistory(context, session.userId) }
+                NexusPlayer(currentUrl, Modifier.fillMaxSize(), isLive = true,
+                    onProgress = { history.record(currentPlayback.id, currentPlayback.title, it) })
+            }
+        }
+    }
+    val showLive = selected == 1 && livePlayback && currentUrl != null
+    LaunchedEffect(selected) {
+        if (selected != 1 && requestedLiveId != null) {
+            playbackGeneration++
+            playbackCall?.cancel()
+            playbackBusy = false
+            playingItem = null
+            playbackUrl = null
+            requestedLiveId = null
+            liveExpanded = false
+        }
+    }
+    androidx.activity.compose.BackHandler(enabled = showLive && liveExpanded) { liveExpanded = false }
+    NexusLiveImmersive(showLive && liveExpanded)
+    Row(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding()) {
+        if (showLive) {
+            Column(if (liveExpanded) Modifier.fillMaxSize() else Modifier.fillMaxHeight().weight(1f).padding(8.dp)) {
+                Box(Modifier.fillMaxWidth().weight(1f).background(Color.Black)) {
+                    liveVideo()
+                    if (liveExpanded) {
+                        Surface(Modifier.align(Alignment.TopStart).padding(8.dp), color = Color.Black.copy(alpha = .7f)) {
+                            IconButton(onClick = { liveExpanded = false }) {
+                                Icon(androidx.compose.material.icons.Icons.Filled.ArrowBack, "Voltar ao mini player", tint = gold)
+                            }
+                        }
+                    }
+                    Surface(Modifier.align(Alignment.TopEnd).padding(8.dp), color = Color.Black.copy(alpha = .7f)) {
+                        IconButton(onClick = { liveExpanded = !liveExpanded }) {
+                            androidx.compose.material3.Icon(
+                                if (liveExpanded) androidx.compose.material.icons.Icons.Filled.FullscreenExit
+                                else androidx.compose.material.icons.Icons.Filled.Fullscreen,
+                                if (liveExpanded) "Voltar ao mini player" else "Tela cheia", tint = gold)
+                        }
+                    }
+                }
+                if (!liveExpanded) {
+                    Text(currentPlayback?.title.orEmpty(), color = gold, modifier = Modifier.padding(8.dp))
+                    Text("Toque novamente no canal para tela cheia", color = Color.LightGray, fontSize = 12.sp)
+                }
+            }
+        }
+        if (!showLive || !liveExpanded) Box(if (showLive) Modifier.weight(1f).fillMaxHeight() else Modifier.fillMaxSize()) {
     MaterialTheme(colorScheme = darkColorScheme(
         primary = gold, onPrimary = Color.Black,
         background = Color(0xFF080808), surface = Color(0xFF171717)
@@ -251,12 +327,12 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
                     }
                     val visible = items.filter { (!favoritesOnly || it.id in favorites) && it.type.lowercase() in accepted && it.title.contains(query, ignoreCase = true) }
                     visible.forEach { item ->
-                        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF151515))) {
+                        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(containerColor = if (selected == 1 && requestedLiveId == item.id) Color(0xFF332A16) else Color(0xFF151515))) {
                             Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                                 Box(Modifier.size(44.dp).background(Color(0xFF302717), RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
                                     Text(if (selected == 1) "▣" else "▶", color = gold, fontSize = 22.sp)
                                 }
-                                Text(item.title, Modifier.weight(1f).clickable(enabled = !playbackBusy) { play(item) }.padding(12.dp), color = Color.White)
+                                Text(item.title, Modifier.weight(1f).clickable(enabled = selected == 1 || !playbackBusy) { play(item) }.padding(12.dp), color = Color.White)
                                 TextButton(onClick = {
                                     favorites = if (item.id in favorites) favorites - item.id else favorites + item.id
                                     prefs.edit().putStringSet("ids", favorites.toSet()).apply()
@@ -297,6 +373,36 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
                     OutlinedButton(onClick = { hlsDemo = false; demo = true }) { Text("Testar vídeo MP4") }
                     OutlinedButton(onClick = { hlsDemo = true; demo = true }) { Text("Testar vídeo HLS") }
                     TextButton(onClick = onExit) { Text("Sair") }
+                }
+            }
+        }
+    }
+        }
+    }
+}
+
+@Composable
+private fun NexusLiveImmersive(fullscreen: Boolean) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val activity = remember(context) {
+        var owner = context
+        while (owner is android.content.ContextWrapper && owner !is android.app.Activity) owner = owner.baseContext
+        owner as? android.app.Activity
+    }
+    DisposableEffect(activity, fullscreen) {
+        val window = activity?.window
+        val controller = window?.let { androidx.core.view.WindowCompat.getInsetsController(it, it.decorView) }
+        val behavior = controller?.systemBarsBehavior
+        val insets = window?.decorView?.let { androidx.core.view.ViewCompat.getRootWindowInsets(it) }
+        if (fullscreen) {
+            controller?.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            controller?.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+        }
+        onDispose {
+            if (fullscreen && controller != null) {
+                if (behavior != null) controller.systemBarsBehavior = behavior
+                for (type in listOf(androidx.core.view.WindowInsetsCompat.Type.statusBars(), androidx.core.view.WindowInsetsCompat.Type.navigationBars())) {
+                    if (insets?.isVisible(type) != false) controller.show(type) else controller.hide(type)
                 }
             }
         }
