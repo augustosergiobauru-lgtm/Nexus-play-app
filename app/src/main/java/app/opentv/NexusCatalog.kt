@@ -10,7 +10,31 @@ class NexusCatalog(private val projectUrl: String, private val publishableKey: S
     data class Item(val id: String, val title: String, val type: String, val categoryId: String?)
     private val client = OkHttpClient.Builder().followRedirects(false).followSslRedirects(false).build()
 
-    fun page(session: NexusAuth.Session, offset: Int = 0, contentType: String? = null, query: String = "", callback: (Result<List<Item>>) -> Unit) {
+    data class Category(val id: String, val name: String)
+    fun liveCategories(session: NexusAuth.Session, callback: (Result<List<Category>>) -> Unit) {
+        val url = (projectUrl.trimEnd('/') + "/rest/v1/categories").toHttpUrl().newBuilder()
+            .addQueryParameter("select", "id,name")
+            .addQueryParameter("content_type", "eq.live")
+            .addQueryParameter("order", "name.asc")
+            .addQueryParameter("limit", "1000").build()
+        val request = Request.Builder().url(url).header("apikey", publishableKey)
+            .header("Authorization", "Bearer ${session.accessToken}").build()
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) { callback(Result.failure(e)) }
+            override fun onResponse(call: Call, response: Response) {
+                callback(response.use { runCatching {
+                    check(it.isSuccessful) { "Falha ao carregar categorias" }
+                    val rows = JSONArray(it.body?.string().orEmpty())
+                    (0 until rows.length()).map { i ->
+                        val row = rows.getJSONObject(i)
+                        Category(row.getString("id"), row.getString("name"))
+                    }.sortedWith(compareBy<Category> { it.name.contains("24", true) }.thenBy { it.name })
+                } })
+            }
+        })
+    }
+
+    fun page(session: NexusAuth.Session, offset: Int = 0, contentType: String? = null, query: String = "", categoryId: String? = null, callback: (Result<List<Item>>) -> Unit) {
         try {
             require(offset >= 0)
             val base = (projectUrl.trimEnd('/') + "/rest/v1/channels").toHttpUrl()
@@ -22,6 +46,7 @@ class NexusCatalog(private val projectUrl: String, private val publishableKey: S
                 .addQueryParameter("order", "title.asc,id.asc")
                 .addQueryParameter("limit", "100")
                 .addQueryParameter("offset", offset.toString())
+            categoryId?.let { builder.addQueryParameter("category_id", "eq.$it") }
             contentType?.let { builder.addQueryParameter("content_type", "eq.$it") }
             val search = query.trim().take(100).replace("*", "").replace("%", "").replace("_", "")
             if (search.isNotEmpty()) builder.addQueryParameter("title", "ilike.%$search%")
