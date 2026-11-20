@@ -30,7 +30,23 @@ fun NexusEntry() {
                     handler.post {
                         if (active.get()) {
                             message = result.fold(
-                                onSuccess = { if (it) "Assinatura válida. Autorização do aparelho pendente." else "Assinatura inválida ou vencida." },
+                                onSuccess = { valid ->
+                                    if (!valid) "Assinatura inválida ou vencida."
+                                    else if (deviceId == null) "Identificação do aparelho indisponível."
+                                    else {
+                                        NexusSupabase.checkOwnDevice(current, deviceId) { approval ->
+                                            handler.post {
+                                                if (active.get()) {
+                                                    message = approval.fold(
+                                                        onSuccess = { if (it) "Assinatura e aparelho aprovados. Player em desenvolvimento." else "Aparelho aguardando aprovação administrativa." },
+                                                        onFailure = { "Falha ao verificar o aparelho." }
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        "Verificando aparelho..."
+                                    }
+                                },
                                 onFailure = { "Não foi possível validar a assinatura." }
                             )
                         }
