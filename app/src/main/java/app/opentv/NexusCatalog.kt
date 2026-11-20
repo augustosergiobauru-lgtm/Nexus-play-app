@@ -34,7 +34,7 @@ class NexusCatalog(private val projectUrl: String, private val publishableKey: S
         })
     }
 
-    fun page(session: NexusAuth.Session, offset: Int = 0, contentType: String? = null, query: String = "", categoryId: String? = null, callback: (Result<List<Item>>) -> Unit) {
+    fun page(session: NexusAuth.Session, offset: Int = 0, contentType: String? = null, query: String = "", categoryId: String? = null, recentlyAdded: Boolean = false, callback: (Result<List<Item>>) -> Unit) {
         try {
             require(offset >= 0)
             val base = (projectUrl.trimEnd('/') + "/rest/v1/channels").toHttpUrl()
@@ -43,7 +43,7 @@ class NexusCatalog(private val projectUrl: String, private val publishableKey: S
             val builder = base.newBuilder()
                 .addQueryParameter("select", "id,title,content_type,category_id,logo_url")
                 .addQueryParameter("is_active", "eq.true")
-                .addQueryParameter("order", "title.asc,id.asc")
+                .addQueryParameter("order", if (recentlyAdded) "created_at.desc,id.desc" else "title.asc,id.asc")
                 .addQueryParameter("limit", "100")
                 .addQueryParameter("offset", offset.toString())
             categoryId?.let { builder.addQueryParameter("category_id", "eq.$it") }

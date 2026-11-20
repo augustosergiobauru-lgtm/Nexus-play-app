@@ -52,7 +52,7 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
         val alive = java.util.concurrent.atomic.AtomicBoolean(true)
         var pending = 3
         listOf("live", "movie", "series").forEach { type ->
-            catalog.page(session, contentType = type) { result ->
+            catalog.page(session, contentType = type, recentlyAdded = type != "live") { result ->
                 handler.post {
                     if (alive.get()) {
                         result.onSuccess { page -> homeItems = homeItems.filterNot { it.type == type } + page }
@@ -293,20 +293,43 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
                 playbackError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 if (selected != 0) Text(tabs[selected], style = MaterialTheme.typography.headlineSmall)
                 if (selected == 0) {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text("O que vamos assistir?", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                            Text("Explore canais, filmes e séries", color = Color.LightGray, fontSize = 12.sp)
-                        }
-                        listOf("Ao Vivo", "Filmes", "Séries").forEachIndexed { index, label ->
-                            TextButton(onClick = { selected = index + 1 }) { Text(label, color = gold) }
+                    val featured = homeItems.firstOrNull { it.type == "movie" && !it.logoUrl.isNullOrBlank() }
+                        ?: homeItems.firstOrNull { it.type == "series" && !it.logoUrl.isNullOrBlank() }
+                        ?: homeItems.firstOrNull { it.type in setOf("movie", "series") }
+                    if (featured != null) {
+                        Box(Modifier.fillMaxWidth().height(196.dp).clip(RoundedCornerShape(16.dp))
+                            .background(Color(0xFF171717))) {
+                            if (!featured.logoUrl.isNullOrBlank()) {
+                                coil.compose.AsyncImage(model = featured.logoUrl, contentDescription = null,
+                                    contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                            }
+                            Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(
+                                Color(0xFF080808).copy(alpha = .96f), Color(0xFF080808).copy(alpha = .72f),
+                                Color(0xFF080808).copy(alpha = .12f)))))
+                            Column(Modifier.fillMaxHeight().fillMaxWidth(.7f).padding(20.dp),
+                                verticalArrangement = Arrangement.Center) {
+                                Text("EM DESTAQUE", color = gold, fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                                Spacer(Modifier.height(8.dp))
+                                Text(featured.title, color = Color.White, fontSize = 25.sp,
+                                    fontWeight = FontWeight.Bold, maxLines = 2,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                Spacer(Modifier.height(6.dp))
+                                Text("Novidades para sua próxima sessão", color = Color(0xFFD0D0D0), fontSize = 12.sp)
+                                Spacer(Modifier.height(10.dp))
+                                Button(enabled = !playbackBusy,
+                                    onClick = { if (featured.type == "series") { selected = 3; seriesDetail = featured } else play(featured) },
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black)) {
+                                    Text(if (featured.type == "series") "Ver série" else "Assistir")
+                                }
+                            }
                         }
                     }
                     if (homeLoading) LinearProgressIndicator(Modifier.fillMaxWidth(), color = gold)
                     if (homeFailed) Text("Parte do catálogo não pôde ser carregada. Abra a categoria para tentar novamente.", color = Color.LightGray)
                 }
                 val sections = when (selected) {
-                    0 -> listOf("Ao vivo", "Filmes", "Séries")
+                    0 -> listOf("Filmes • Lançamentos", "Séries • Lançamentos", "Ao vivo")
                     1 -> listOf("Categorias", "Favoritos", "Recentes")
                     2 -> listOf("Categorias de filmes", "Favoritos")
                     3 -> listOf("Categorias de séries", "Favoritos")
@@ -362,22 +385,24 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
                     if (more && !loading) Button(onClick = { loadPage() }) { Text("Carregar mais") }
                  } else if (selected == 0) {
                     sections.forEach { title ->
+                        Spacer(Modifier.height(6.dp))
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, color = Color.White, fontWeight = FontWeight.Bold)
-                            TextButton(onClick = { selected = when (title) { "Ao vivo" -> 1; "Filmes" -> 2; else -> 3 } }) { Text("Ver todos", color = gold) }
+                            TextButton(onClick = { selected = when (title) { "Ao vivo" -> 1; "Filmes • Lançamentos" -> 2; else -> 3 } }) { Text("Ver todos", color = gold) }
                         }
+                        if (title != "Ao vivo") Text("Adicionados recentemente ao catálogo", color = Color(0xFF909090), fontSize = 11.sp)
                         val types = when(title) {
                             "Ao vivo" -> setOf("live", "channel", "tv")
-                            "Filmes" -> setOf("movie", "film", "vod")
-                            "Séries" -> setOf("series", "episode")
+                            "Filmes • Lançamentos" -> setOf("movie", "film", "vod")
+                            "Séries • Lançamentos" -> setOf("series", "episode")
                             else -> emptySet()
                         }
                         val entries = homeItems.filter { it.type.lowercase() in types }.take(10)
                         if (entries.isEmpty()) Text(if (types.isEmpty()) "Nenhuma reprodução recente" else "Conteúdo em breve", color = Color.Gray, fontSize = 13.sp)
-                        else Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        else Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                             entries.forEach { entry ->
-                                Column(Modifier.width(if (title == "Ao vivo") 120.dp else 104.dp).clickable(enabled = !playbackBusy) { play(entry) }) {
-                                    NexusCatalogArtwork(entry, Modifier.fillMaxWidth().height(if (title == "Ao vivo") 64.dp else 138.dp), contain = title == "Ao vivo")
+                                Column(Modifier.width(if (title == "Ao vivo") 120.dp else 118.dp).clickable(enabled = !playbackBusy) { play(entry) }) {
+                                    NexusCatalogArtwork(entry, Modifier.fillMaxWidth().height(if (title == "Ao vivo") 64.dp else 162.dp), contain = title == "Ao vivo")
                                     Text(entry.title, Modifier.padding(top = 5.dp), color = Color.White, fontSize = 12.sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                                 }
                             }
