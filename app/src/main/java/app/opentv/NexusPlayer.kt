@@ -91,7 +91,7 @@ fun NexusPlayer(authorizedUrl: String, modifier: Modifier = Modifier, resumePosi
             Surface(Modifier.align(Alignment.Center).padding(8.dp)) {
                 Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(when (code) {
-                        "ERROR_CODE_IO_BAD_HTTP_STATUS" -> "O servidor recusou a reprodução. Verifique a disponibilidade do vídeo."
+                        "ERROR_CODE_IO_BAD_HTTP_STATUS" -> "O servidor recusou a reprodução (HTTP ${generateSequence<Throwable>(player.playerError) { it.cause }.filterIsInstance<androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException>().firstOrNull()?.responseCode?.toString() ?: "desconhecido"}). Verifique a disponibilidade do vídeo."
                         "ERROR_CODE_IO_NETWORK_CONNECTION_FAILED", "ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT" -> "Falha de conexão. Verifique sua internet."
                         else -> "Falha na reprodução: $code"
                     })
