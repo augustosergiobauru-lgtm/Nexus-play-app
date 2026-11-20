@@ -67,3 +67,19 @@ No-credential root connectivity probes: first HTTPS server HTTP 200; second HTTP
 A credentialed provider test was blocked by automatic approval review because external destinations were not yet verified and explicit consent to send the pictured secrets was required. No provider catalog result is available; do not report a successful provider import.
 Provider secrets have not been committed or configured by this update.
 The Android click-to-play limitation documented above remains.
+
+## V1 catalog-to-player connection
+The branch now connects channel/movie/episode titles and home catalog cards to the existing NexusPlaybackScreen and its unchanged ExoPlayer/LibVLC implementation.
+NexusPlaybackAccess requests resolve_nexus_playback with the current session and persistent installation identifier.
+The SQL function runs as SECURITY INVOKER, requires auth.uid(), an active customer, an unexpired active subscription, an active device belonging to that customer, and an available channel from an active playlist.
+No provider credentials are embedded in Android source or added to catalog metadata.
+
+Actual database checks:
+- Unauthenticated resolution rejected.
+- Existing eligible account/device resolved the public sample.
+- Unapproved device rejected.
+- Tests ran within a reverted transaction, with no user/device/subscription records changed.
+
+Provider test retry after the user's broad permission was again rejected by automatic review: end-user-authored permission must explicitly identify the pictured credentials and external destination. No credentialed provider result is available, and no workaround was attempted.
+
+Latest Android changes await GitHub compilation and player validation before merge. Earlier M3U/Xtream CI completed successfully.
