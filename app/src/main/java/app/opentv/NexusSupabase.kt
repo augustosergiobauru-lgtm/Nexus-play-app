@@ -23,6 +23,39 @@ object NexusSupabase {
         NexusDeviceAccess(SUPABASE_URL, SUPABASE_ANON_KEY)
     )
 
+    fun checkOwnDevice(session: NexusAuth.Session, deviceId: String, callback: (Result<Boolean>) -> Unit) {
+        try {
+            val url = okhttp3.HttpUrl.Builder()
+                .scheme("https").host("ypjajibbcyopkfrenibb.supabase.co")
+                .addPathSegments("rest/v1/customers")
+                .addQueryParameter("select", "id,devices!inner(id)")
+                .addQueryParameter("auth_user_id", "eq.${session.userId}")
+                .addQueryParameter("status", "eq.active")
+                .addQueryParameter("devices.device_identifier", "eq.$deviceId")
+                .addQueryParameter("devices.status", "eq.active")
+                .addQueryParameter("limit", "1").build()
+            val request = Request.Builder().url(url)
+                .header("apikey", SUPABASE_ANON_KEY)
+                .header("Authorization", "Bearer ${session.accessToken}").get().build()
+            client.newCall(request).enqueue(object : okhttp3.Callback {
+                override fun onFailure(call: okhttp3.Call, e: IOException) {
+                    callback(Result.failure(IOException("Falha na conexão")))
+                }
+                override fun onResponse(call: okhttp3.Call, response: Response) {
+                    val result = response.use {
+                        runCatching {
+                            check(it.isSuccessful)
+                            org.json.JSONArray(it.body?.string().orEmpty()).length() > 0
+                        }
+                    }
+                    callback(result)
+                }
+            })
+        } catch (e: Exception) {
+            callback(Result.failure(e))
+        }
+    }
+
     private val client = OkHttpClient()
 
     fun get(
