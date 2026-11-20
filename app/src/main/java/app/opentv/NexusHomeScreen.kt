@@ -1,6 +1,11 @@
 package app.opentv
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -70,32 +75,40 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
         Scaffold(
             containerColor = Color(0xFF080808),
             bottomBar = {
-                NavigationBar(containerColor = Color(0xFF171717)) {
+                NavigationBar(containerColor = Color(0xFF101010)) {
                     tabs.forEachIndexed { index, name ->
                         NavigationBarItem(
                             selected = selected == index,
                             onClick = { selected = index },
                             icon = { Text(listOf("⌂", "▣", "▶", "▤", "⋯")[index], fontSize = 20.sp) },
-                            label = { Text(name) }
+                            label = { Text(name, fontSize = 11.sp) },
+                            colors = NavigationBarItemDefaults.colors(selectedIconColor = gold, selectedTextColor = gold, indicatorColor = Color(0xFF332A16), unselectedIconColor = Color.Gray, unselectedTextColor = Color.Gray)
                         )
                     }
                 }
             }
         ) { padding ->
             Column(
-                Modifier.fillMaxSize().padding(padding).padding(20.dp)
+                Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp, vertical = 12.dp)
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(18.dp)
             ) {
-                Text("NEXUS PLAY", color = gold, fontSize = 28.sp)
-                Text("Prévia de desenvolvimento", color = Color.LightGray)
-                Text(tabs[selected], style = MaterialTheme.typography.headlineMedium)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("△", color = gold, fontSize = 32.sp)
+                    Spacer(Modifier.width(8.dp))
+                    Text("NEXUS PLAY", color = gold, fontSize = 23.sp, fontWeight = FontWeight.Bold)
+                }
+                if (selected != 0) Text(tabs[selected], style = MaterialTheme.typography.headlineSmall)
                 if (selected == 0) {
-                    Button(onClick = { hlsDemo = false; demo = true }) { Text("Testar vídeo MP4") }
-                    Button(onClick = { hlsDemo = true; demo = true }) { Text("Testar vídeo HLS") }
+                    Box(Modifier.fillMaxWidth().height(210.dp).background(Brush.verticalGradient(listOf(Color(0xFF302717), Color(0xFF101010))), RoundedCornerShape(16.dp)).padding(18.dp), contentAlignment = Alignment.BottomStart) {
+                        Column { Text("DESTAQUES", color = gold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(items.firstOrNull()?.title ?: "Seu entretenimento em um só lugar", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                            Text(if (items.isEmpty()) "Catálogo aguardando conteúdo" else "Explore o catálogo", color = Color.LightGray)
+                        }
+                    }
                 }
                 val sections = when (selected) {
-                    0 -> listOf("Destaques", "Continuar assistindo", "Ao vivo", "Filmes", "Séries")
+                    0 -> listOf("Continuar assistindo", "Ao vivo", "Filmes", "Séries")
                     1 -> listOf("Categorias", "Favoritos", "Recentes")
                     2 -> listOf("Categorias de filmes", "Favoritos")
                     3 -> listOf("Categorias de séries", "Favoritos")
@@ -126,13 +139,36 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
                     if (loading) CircularProgressIndicator()
                     error?.let { Text(it) }
                     if (more && !loading) Button(onClick = { loadPage() }) { Text("Carregar mais") }
-                } else sections.forEach { title ->
-                    Text(title, style = MaterialTheme.typography.titleLarge, color = gold)
-                    Card(Modifier.fillMaxWidth()) {
-                        Text("Nenhum conteúdo disponível nesta prévia.", Modifier.padding(18.dp))
+                 } else if (selected == 0) {
+                    sections.forEach { title ->
+                        Text(title, style = MaterialTheme.typography.titleMedium, color = Color.White, fontWeight = FontWeight.Bold)
+                        val types = when(title) {
+                            "Ao vivo" -> setOf("live", "channel", "tv")
+                            "Filmes" -> setOf("movie", "film", "vod")
+                            "Séries" -> setOf("series", "episode")
+                            else -> emptySet()
+                        }
+                        val entries = items.filter { it.type.lowercase() in types }.take(10)
+                        if (entries.isEmpty()) Text(if (types.isEmpty()) "Nenhuma reprodução recente" else "Conteúdo em breve", color = Color.Gray, fontSize = 13.sp)
+                        else Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            entries.forEach { entry ->
+                                Box(Modifier.width(116.dp).height(146.dp).background(Color(0xFF1C1A16), RoundedCornerShape(10.dp)).padding(10.dp), contentAlignment = Alignment.BottomStart) {
+                                    Text(entry.title, color = Color.White, maxLines = 3)
+                                }
+                            }
+                        }
                     }
+                    if (loading) CircularProgressIndicator()
+                    error?.let { Text(it) }
+                } else {
+                    Text("Minha conta", color = gold)
+                    Text("Dispositivo autorizado", color = Color.LightGray)
+                    HorizontalDivider()
+                    Text("Diagnóstico do player", color = gold)
+                    OutlinedButton(onClick = { hlsDemo = false; demo = true }) { Text("Testar vídeo MP4") }
+                    OutlinedButton(onClick = { hlsDemo = true; demo = true }) { Text("Testar vídeo HLS") }
+                    TextButton(onClick = onExit) { Text("Sair") }
                 }
-                if (selected == 4) Button(onClick = onExit) { Text("Sair") }
             }
         }
     }
