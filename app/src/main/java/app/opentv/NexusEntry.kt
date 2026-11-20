@@ -23,6 +23,25 @@ fun NexusEntry() {
     var restoreError by remember { mutableStateOf(false) }
     var attempt by remember { mutableStateOf(0) }
     fun signOut() { store.clear(); session = null }
+    // Keep phones upright for sign-in and switch immediately after authentication.
+    // TVs always remain in landscape, including on the login screen.
+    val activity = remember(context) {
+        var owner = context
+        while (owner is android.content.ContextWrapper && owner !is android.app.Activity) {
+            owner = owner.baseContext
+        }
+        owner as? android.app.Activity
+    }
+    val orientation = if (session != null || isRunningOnTelevision(context)) {
+        android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+    } else {
+        android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+    }
+    SideEffect {
+        if (activity != null && activity.requestedOrientation != orientation) {
+            activity.requestedOrientation = orientation
+        }
+    }
     DisposableEffect(attempt) {
         val active = java.util.concurrent.atomic.AtomicBoolean(true)
         val token = store.read()
