@@ -47,7 +47,7 @@ class DualPlaybackTest {
                 await("Exo pause") { !session.playing }
                 main {
                     session.toggleMute()
-                    session.setSpeed(1.5f)
+                    session.changeSpeed(1.5f)
                     // Force the same path called by the Exo error listener, while paused.
                     session.fail("Injected decoder failure")
                     host.removeAllViews()

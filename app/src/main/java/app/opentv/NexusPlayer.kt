@@ -92,7 +92,7 @@ fun NexusPlayer(authorizedUrl: String, modifier: Modifier = Modifier, resumePosi
                                 if (tracks.isEmpty()) Text("Nenhuma faixa disponível nesta transmissão.")
                             }
                             "Velocidade" -> listOf(.5f, 1f, 1.5f, 2f).forEach { rate ->
-                                TextButton(onClick = { session.setSpeed(rate); panel = null }) { Text("${rate}x") }
+                                TextButton(onClick = { session.changeSpeed(rate); panel = null }) { Text("${rate}x") }
                             }
                             else -> {
                                 TextButton(onClick = { panel = "Áudio" }) { Text("Áudio") }

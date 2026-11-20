@@ -163,8 +163,7 @@ internal class NexusPlayback(
                         MediaPlayer.Event.Playing -> {
                             buffering = false
                             hasPlayed = true
-                            pendingSeek?.let { if (!live && p.isSeekable) p.setTime(it) }
-                            pendingSeek = null
+                            pendingSeek?.let { if (!live && p.isSeekable) { p.setTime(it); pendingSeek = null } }
                             p.setRate(speed)
                             p.setVolume(if (muted) 0 else 100)
                             if (!desiredPlay || !foreground) p.pause()
@@ -207,7 +206,8 @@ internal class NexusPlayback(
             audioTracks = tracks(C.TRACK_TYPE_AUDIO)
             subtitles = tracks(C.TRACK_TYPE_TEXT)
         } else if (v != null) {
-            position = v.time.coerceAtLeast(0L)
+            pendingSeek?.let { if (v.isSeekable) { v.setTime(it); pendingSeek = null } }
+            if (pendingSeek == null) position = v.time.coerceAtLeast(0L)
             duration = v.length.coerceAtLeast(0L)
             seekable = v.isSeekable
             audioTracks = v.audioTracks?.map { Track(it.id, it.name) }.orEmpty()
@@ -235,7 +235,7 @@ internal class NexusPlayback(
         exo?.volume = if (muted) 0f else 1f
         vlc?.setVolume(if (muted) 0 else 100)
     }
-    fun setSpeed(value: Float) {
+    fun changeSpeed(value: Float) {
         speed = value
         exo?.setPlaybackSpeed(value)
         vlc?.setRate(value)
