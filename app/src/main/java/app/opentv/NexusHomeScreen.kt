@@ -15,12 +15,13 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
     var demo by remember { mutableStateOf(false) }
+    var hlsDemo by remember { mutableStateOf(false) }
     if (demo) {
         androidx.activity.compose.BackHandler { demo = false }
         NexusPlaybackScreen(
             session = session,
-            item = NexusCatalog.Item("public-demo-bbb", "Big Buck Bunny — demonstração", "movie", null),
-            authorizedUrl = "https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+            item = NexusCatalog.Item(if (hlsDemo) "public-demo-hls" else "public-demo-bbb", "Big Buck Bunny — demonstração", "movie", null),
+            authorizedUrl = if (hlsDemo) "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8" else "https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
             onClose = { demo = false }
         )
         return
@@ -89,8 +90,9 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
                 Text("NEXUS PLAY", color = gold, fontSize = 28.sp)
                 Text("Prévia de desenvolvimento", color = Color.LightGray)
                 Text(tabs[selected], style = MaterialTheme.typography.headlineMedium)
-                if (selected == 0) Button(onClick = { demo = true }) {
-                    Text("Reproduzir vídeo de teste")
+                if (selected == 0) {
+                    Button(onClick = { hlsDemo = false; demo = true }) { Text("Testar vídeo MP4") }
+                    Button(onClick = { hlsDemo = true; demo = true }) { Text("Testar vídeo HLS") }
                 }
                 val sections = when (selected) {
                     0 -> listOf("Destaques", "Continuar assistindo", "Ao vivo", "Filmes", "Séries")
