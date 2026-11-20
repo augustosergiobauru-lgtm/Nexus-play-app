@@ -37,8 +37,8 @@ export function xtreamRows(entries,categories,section,server,credentials){
  }
  return {rows,invalid,duplicates};
 }
-export async function loadXtream(source,credentials,section='live',seriesIndex=0){
- if(!['live','movie','series'].includes(section)||!Number.isInteger(seriesIndex)||seriesIndex<0)throw Error('INVALID_XTREAM_CURSOR');
+export async function loadXtream(source,credentials,section='live',seriesIndex=0,categoryIndex=0){
+ if(!['live','movie','series'].includes(section)||!Number.isInteger(seriesIndex)||seriesIndex<0||!Number.isInteger(categoryIndex)||categoryIndex<0)throw Error('INVALID_XTREAM_CURSOR');
  const server=serverURL(source,credentials.allow_insecure_http);
  async function json(action,extra){
   const raw=await readSource(xtreamURL(server,credentials,action,extra));
@@ -50,9 +50,13 @@ export async function loadXtream(source,credentials,section='live',seriesIndex=0
  const categoryAction={live:'get_live_categories',movie:'get_vod_categories',series:'get_series_categories'}[section];
  const categories=await json(categoryAction);
  if(!Array.isArray(categories))throw Error('XTREAM_INVALID_CATEGORIES');
- const catalog=await json({live:'get_live_streams',movie:'get_vod_streams',series:'get_series'}[section]);
+ categories.sort((a,b)=>text(a.category_id).localeCompare(text(b.category_id),'en',{numeric:true}));
+ if(section!=='series'&&categoryIndex>=categories.length&&categories.length)throw Error('INVALID_XTREAM_CURSOR');
+ const selectedCategory=section==='series'?null:categories[categoryIndex];
+ const catalog=await json({live:'get_live_streams',movie:'get_vod_streams',series:'get_series'}[section],selectedCategory?{category_id:text(selectedCategory.category_id)}:undefined);
  if(!Array.isArray(catalog))throw Error('XTREAM_INVALID_CATALOG');
- let entries=catalog,nextSection=section==='live'?'movie':section==='movie'?'series':null,nextSeriesIndex=0;
+ let entries=catalog,nextSection=section==='live'?'movie':section==='movie'?'series':null,nextSeriesIndex=0,nextCategoryIndex=0;
+ if(section!=='series'&&categoryIndex+1<categories.length){nextSection=section;nextCategoryIndex=categoryIndex+1;}
  if(section==='series'){
   // Sort series by stable identity so paginating providers with unstable ordering does not skip shows.
   catalog.sort((a,b)=>text(a.series_id).localeCompare(text(b.series_id),'en',{numeric:true}));
@@ -72,6 +76,6 @@ export async function loadXtream(source,credentials,section='live',seriesIndex=0
  const parsed=xtreamRows(entries,categories,section,server,{...credentials,live_extension});
  parsed.rows.sort((a,b)=>a.external_id.localeCompare(b.external_id,'en',{numeric:true}));
  if(entries.length&&!parsed.rows.length)throw Error('XTREAM_NO_VALID_STREAMS');
- const fingerprint=await sha256(JSON.stringify({source,section,seriesIndex,rows:parsed.rows}));
- return {...parsed,fingerprint,nextSection,nextSeriesIndex,section,seriesIndex};
+ const fingerprint=await sha256(JSON.stringify({source,section,seriesIndex,categoryIndex,rows:parsed.rows}));
+ return {...parsed,fingerprint,nextSection,nextSeriesIndex,nextCategoryIndex,section,seriesIndex,categoryIndex};
 }

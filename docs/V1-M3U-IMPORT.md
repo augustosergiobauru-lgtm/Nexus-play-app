@@ -1,85 +1,39 @@
-# V1 M3U importer
+# Nexus Play V1: M3U and Xtream import
 
-Deployed to project ypjajibbcyopkfrenibb as import-m3u, version 1, JWT verification enabled.
-No Android files were changed.
+## Deployed backend
+Project: ypjajibbcyopkfrenibb. Function: import-m3u. JWT validation plus an Auth getUser and profiles.role=owner check protect administrative calls. No V2 app was created.
 
-## Authorization
-The request needs a valid Supabase user access token. The function validates it with Auth and checks profiles.role = owner using a server-side client.
-A row in m3u_authorizations must reference the playlist and SHA256 of its current source_url, with evidence of distribution rights. Changing the URL invalidates the approval.
-The provider "Fornecedor teste 1" has no approval: its stored https://example.com/teste.m3u returned HTTP 404.
+The importer supports ready M3U files and Xtream server/username/password connections. The latter uses player_api.php for live streams, VOD and series episode catalogs.
 
-## Invocation
-POST /functions/v1/import-m3u
-Authorization: Bearer <admin user access token>
-Content-Type: application/json
+Administrative configure_xtream requests store credentials in m3u_xtream_sources. That table has RLS and no anon/authenticated access; only service_role can read it. Credentials never enter Android source, catalog metadata, public errors or repository files. A source authorization record is bound to the hash of the playlist source URL.
 
-Body: {"playlist_id":"<uuid>","offset":0,"limit":200}
-Continue with next_offset and fingerprint from the response until done=true.
-Keep the same limit while retrying a page. SOURCE_CHANGED_RESTART requires offset=0.
-The connector does not provide an admin user session or an Edge invocation tool; the authenticated deployed HTTP path has not been exercised in this session.
+## Pagination
+POST with playlist_id, limit (1–200), offset and, on continuation, fingerprint.
+For Xtream also pass section (live/movie/series), category_index and series_index.
+Follow next_offset inside a category/show; when it is null, continue at offset 0 using next_section, next_category_index and next_series_index. done=true ends traversal.
 
-## Behavior
-M3U EXTINF, tvg-id, tvg-logo, group-title, EXTGRP, BOM, CRLF, relative URLs.
-Heuristic live/movie/series classification from group, title and URL; ambiguous items default to live.
-HLS segment manifests and HTML pages are rejected.
-HTTPS public source, DNS filtering, no redirects, 20 second fetch timeout, 16 MiB limit, 200 entries/page.
-Atomic RPC batch, per-playlist lock, URL deduplication, audited page replay, source fingerprint.
-No channels are deleted or deactivated by an import. Existing channels match by playlist_id + stream_url.
-last_import_at is set only after the final batch; errors are sanitized.
+Live/movie catalogs are fetched per category: the actual provider VOD response exceeded the 16 MiB bound when requested globally. Series import reads one show's episodes at a time.
+HTTP sources require explicit configuration approval. HTTPS certificate checks remain enabled. No silent protocol or port changes are performed.
 
-## Verified results — 2026-11-20
-- 13 local parser and HTTP handler tests passed (Auth and REST mocked).
-- Deployed HTTP request without auth: 401 UNAUTHORIZED_NO_AUTH_HEADER.
-- Public fixture downloaded from immutable GitHub URL and parsed.
-- Media sample returned HTTP 200, video/mp4.
-- Public rights evidence: https://peach.blender.org/about/ (CC BY 3.0; attribution in imported title).
-- Actual database RPC: first insert 1; second content fingerprint update 1/insert 0; page replay insert 0/update 0.
-- Actual database transaction test: 200 + 1 items and page replay passed, test rows rolled back.
-- Persistent catalog: 1 movie in Filmes livres. Original provider: 0 contents, status error, last_import_at null.
+## Database behavior
+import_m3u_batch validates source authorization, serializes imports by playlist, verifies cursor continuity and records page replay. Categories and channels are written with set operations; exact stream URL matching uses an additional hash index for large catalogs. Existing records are updated, never deleted. Existing inactive channels remain inactive.
+Successful completion updates status and last_import_at; errors are sanitized.
 
-## APK compatibility limits
-NexusCatalog.kt reads id,title,content_type,category_id with pagination; imported fields and enum match.
-NexusHomeScreen.kt currently only makes series titles clickable to metadata details; live/movie titles do not invoke NexusPlaybackScreen.
-Playback of imported catalog items is therefore not implemented by this backend-only PR. The existing ExoPlayer/LibVLC diagnostic player remains untouched.
-No physical APK playback test was performed.
+## Android V1
+NexusCatalog queries by content type and title on the server, with paginated results. Search resets pagination and ignores stale responses.
+Catalog titles/cards request resolve_nexus_playback before opening the existing NexusPlaybackScreen.
+The SECURITY INVOKER resolver checks current user, active customer, unexpired subscription, approved installation and available channel.
+ExoPlayer and LibVLC remain in place, with shared controls, mini/fullscreen layout and fallback. HTTP URLs and cross-protocol CDN redirects are supported because the actual provider responds with HTTPS-to-HTTP redirects.
 
-## Database rollout
-supabase/import-m3u-schema.sql is the consolidated initial schema for this feature. It was applied through three incremental managed migrations during this session. Do not reapply it to this project.
-Authorization and page audit tables have RLS. No service keys or provider credentials are committed.
+## Actual validation, 2026-11-20
+- Provider login returned HTTP 200, auth=1, Active following explicit user permission.
+- Persisted provider counts at this checkpoint: 2,165 live channels and 18,185 movies.
+- Provider series catalog: 9,797 shows; episode download/import is ongoing at this checkpoint.
+- Original 31 M3U/Xtream tests passed locally and in GitHub CI; two more tests cover category pagination.
+- Database checks passed for batch pagination/replay, anonymous rejection, eligible account playback resolution, unapproved devices and missing subscriptions.
+- Earlier Android build and emulator tests for public MP4/HLS passed.
+- The current commit adds a real HTTP redirect instrumentation test and needs a fresh build/emulator run.
+- Provider playback probes returned a CDN redirect for the movie and HTTP 429 for one live sample. These probes do not establish decoded playback of actual provider media.
+- Real provider import in this session is executed through the deployed database batch RPC using the same parser/source mapping, with authenticated provider fetches from the execution environment. An admin-session invocation of the deployed Edge HTTP entrypoint has not been exercised.
 
-## Xtream compatibility update
-The screenshots show server/username/password credentials, rather than a ready M3U file. The existing V1 OpenTV dependency already includes an XtreamApi client; its protocol behavior was reviewed instead of copying any other app binary.
-
-The deployed importer now supports Xtream player_api.php:
-- Administrative configure_xtream action with xtream.server, xtream.username, xtream.password, optional allow_insecure_http and authorization_reference.
-- Credentials stored in m3u_xtream_sources, RLS enabled, no anon/authenticated grants; only service_role can access.
-- Source URL remains credential-free. Changing it invalidates the stored connection binding.
-- section=live → get_live_streams, movie → get_vod_streams, series → get_series plus get_series_info.
-- Series are sorted by ID and paginated one show at a time; each show's episodes are imported in batches of at most 200.
-- Use next_offset within a section/show. On completing a page chain, follow next_section and next_series_index at offset=0. done=true ends the full traversal.
-- The final section updates last_import_at; partial pages do not announce full completion.
-- HTTP requires an explicit allow_insecure_http flag. HTTPS on port 80 is preserved as entered; no automatic downgrade or certificate bypass.
-- TS is the default live format; M3U8 is selected when the provider advertises only M3U8.
-- Login/account errors are sanitized and provider URLs with credentials are not returned or logged.
-
-Validation: 13 M3U tests + 18 Xtream tests passed locally with synthetic credentials.
-No-credential root connectivity probes: first HTTPS server HTTP 200; second HTTP server timeout; second HTTPS:80 server HTTP 503. Root probes do not validate the accounts or catalogs.
-A credentialed provider test was blocked by automatic approval review because external destinations were not yet verified and explicit consent to send the pictured secrets was required. No provider catalog result is available; do not report a successful provider import.
-Provider secrets have not been committed or configured by this update.
-The Android click-to-play limitation documented above remains.
-
-## V1 catalog-to-player connection
-The branch now connects channel/movie/episode titles and home catalog cards to the existing NexusPlaybackScreen and its unchanged ExoPlayer/LibVLC implementation.
-NexusPlaybackAccess requests resolve_nexus_playback with the current session and persistent installation identifier.
-The SQL function runs as SECURITY INVOKER, requires auth.uid(), an active customer, an unexpired active subscription, an active device belonging to that customer, and an available channel from an active playlist.
-No provider credentials are embedded in Android source or added to catalog metadata.
-
-Actual database checks:
-- Unauthenticated resolution rejected.
-- Existing eligible account/device resolved the public sample.
-- Unapproved device rejected.
-- Tests ran within a reverted transaction, with no user/device/subscription records changed.
-
-Provider test retry after the user's broad permission was again rejected by automatic review: end-user-authored permission must explicitly identify the pictured credentials and external destination. No credentialed provider result is available, and no workaround was attempted.
-
-Latest Android changes await GitHub compilation and player validation before merge. Earlier M3U/Xtream CI completed successfully.
+No provider credentials or raw catalogs are committed. Consolidated initial schema and follow-up SQL files describe changes already applied to this project; do not reapply them blindly.

@@ -53,6 +53,7 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
     var playbackCall by remember { mutableStateOf<okhttp3.Call?>(null) }
 
     var loading by remember { mutableStateOf(false) }
+    var catalogGeneration by remember { mutableStateOf(0) }
     var more by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     val active = remember { java.util.concurrent.atomic.AtomicBoolean(true) }
@@ -88,9 +89,12 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
         if (loading || !more) return
         loading = true
         error = null
-        catalog.page(session, items.size) { result ->
+        val generation = catalogGeneration
+        val contentType = when (selected) { 1 -> "live"; 2 -> "movie"; 3 -> "series"; else -> null }
+        catalog.page(session, items.size, contentType = contentType, query = query) { result ->
             handler.post {
                 if (active.get()) {
+                    if (generation != catalogGeneration) return@post
                     loading = false
                     result.fold(onSuccess = { page ->
                         items = items + page
@@ -100,7 +104,15 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
             }
         }
     }
-    LaunchedEffect(session) { loadPage() }
+    LaunchedEffect(session, selected, query) {
+        catalogGeneration++
+        items = emptyList()
+        more = true
+        loading = false
+        error = null
+        if (query.isNotBlank()) kotlinx.coroutines.delay(300)
+        if (selected != 4) loadPage()
+    }
     androidx.activity.compose.BackHandler(enabled = seriesDetail != null) { seriesDetail = null }
     val currentPlayback = playingItem
     val currentUrl = playbackUrl

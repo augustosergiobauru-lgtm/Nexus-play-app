@@ -27,6 +27,37 @@ class DualPlaybackTest {
     @Test fun publicMp4BothEnginesAndControls() = exercise("https://storage.googleapis.com/exoplayer-test-media-0/BigBuckBunny_320x180.mp4")
     @Test fun publicHlsBothEnginesAndControls() = exercise("https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8")
 
+
+    @Test fun httpRedirectBothEnginesAndControls() {
+        val server = java.net.ServerSocket(0, 8, java.net.InetAddress.getByName("127.0.0.1"))
+        server.soTimeout = 1000
+        val responder = Thread {
+            while (!server.isClosed) {
+                try {
+                    server.accept().use { socket ->
+                        socket.soTimeout = 5000
+                        val reader = socket.getInputStream().bufferedReader()
+                        while (true) {
+                            val line = reader.readLine() ?: break
+                            if (line.isEmpty()) break
+                        }
+                        val response = "HTTP/1.1 302 Found\r\n" +
+                            "Location: https://storage.googleapis.com/exoplayer-test-media-0/BigBuckBunny_320x180.mp4\r\n" +
+                            "Content-Length: 0\r\nConnection: close\r\n\r\n"
+                        socket.getOutputStream().write(response.toByteArray(Charsets.US_ASCII))
+                        socket.getOutputStream().flush()
+                    }
+                } catch (_: java.io.IOException) { /* Socket timeout or normal shutdown. */ }
+            }
+        }.apply { isDaemon = true; start() }
+        try {
+            exercise("http://127.0.0.1:${server.localPort}/redirect")
+        } finally {
+            server.close()
+            responder.join(2000)
+        }
+    }
+
     private fun exercise(url: String) {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             lateinit var session: NexusPlayback

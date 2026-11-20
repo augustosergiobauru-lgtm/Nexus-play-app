@@ -10,17 +10,22 @@ class NexusCatalog(private val projectUrl: String, private val publishableKey: S
     data class Item(val id: String, val title: String, val type: String, val categoryId: String?)
     private val client = OkHttpClient.Builder().followRedirects(false).followSslRedirects(false).build()
 
-    fun page(session: NexusAuth.Session, offset: Int = 0, callback: (Result<List<Item>>) -> Unit) {
+    fun page(session: NexusAuth.Session, offset: Int = 0, contentType: String? = null, query: String = "", callback: (Result<List<Item>>) -> Unit) {
         try {
             require(offset >= 0)
             val base = (projectUrl.trimEnd('/') + "/rest/v1/channels").toHttpUrl()
             require(base.isHttps)
-            val url = base.newBuilder()
+            require(contentType == null || contentType in setOf("live", "movie", "series"))
+            val builder = base.newBuilder()
                 .addQueryParameter("select", "id,title,content_type,category_id")
                 .addQueryParameter("is_active", "eq.true")
                 .addQueryParameter("order", "title.asc,id.asc")
                 .addQueryParameter("limit", "100")
-                .addQueryParameter("offset", offset.toString()).build()
+                .addQueryParameter("offset", offset.toString())
+            contentType?.let { builder.addQueryParameter("content_type", "eq.$it") }
+            val search = query.trim().take(100).replace("*", "").replace("%", "").replace("_", "")
+            if (search.isNotEmpty()) builder.addQueryParameter("title", "ilike.%$search%")
+            val url = builder.build()
             val request = Request.Builder().url(url)
                 .header("apikey", publishableKey)
                 .header("Authorization", "Bearer ${session.accessToken}").get().build()

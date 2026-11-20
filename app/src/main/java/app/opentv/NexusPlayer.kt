@@ -24,7 +24,7 @@ fun NexusPlayer(authorizedUrl: String, modifier: Modifier = Modifier, resumePosi
                 isLive: Boolean = false, onProgress: (Long) -> Unit = {}) {
     val context = LocalContext.current
     val uri = remember(authorizedUrl) { Uri.parse(authorizedUrl) }
-    if (uri.scheme != "https" || uri.host.isNullOrBlank()) return
+    if (uri.scheme !in setOf("http", "https") || uri.host.isNullOrBlank()) return
     val progressCallback by rememberUpdatedState(onProgress)
     val session = remember(context, authorizedUrl, isLive) {
         NexusPlayback(context, authorizedUrl, resumePositionMs, isLive) { progressCallback(it) }

@@ -52,7 +52,7 @@ export async function handle(req){
 
   let parsed,fingerprint;
   if(config){
-   parsed=await loadXtream(source,config,body.section??'live',body.series_index??0);
+   parsed=await loadXtream(source,config,body.section??'live',body.series_index??0,body.category_index??0);
    fingerprint=parsed.fingerprint;
   }else{
    const text=await readSource(source);
@@ -66,7 +66,7 @@ export async function handle(req){
   let result={inserted:0,updated:0,replayed:false};
   if(batch.length)result=await api('/rest/v1/rpc/import_m3u_batch',{method:'POST',body:JSON.stringify({p_playlist_id:playlistId,p_fingerprint:fingerprint,p_offset:offset,p_items:batch,p_done:done})});
   else if(done)await api('/rest/v1/playlists?id=eq.'+playlistId,{method:'PATCH',body:JSON.stringify({status:'active',last_import_at:new Date().toISOString(),last_check_at:new Date().toISOString(),health_status:'online',last_error:null})});
-  return reply(200,{...result,source_kind:config?'xtream':'m3u',total:parsed.rows.length,processed:batch.length,invalid:parsed.invalid,duplicates:parsed.duplicates,fingerprint,next_offset:pageDone?null:next,section:config?parsed.section:null,series_index:config?parsed.seriesIndex:null,next_section:config?(pageDone?parsed.nextSection:parsed.section):null,next_series_index:config?(pageDone?parsed.nextSeriesIndex:parsed.seriesIndex):null,done});
+  return reply(200,{...result,source_kind:config?'xtream':'m3u',total:parsed.rows.length,processed:batch.length,invalid:parsed.invalid,duplicates:parsed.duplicates,fingerprint,next_offset:pageDone?null:next,section:config?parsed.section:null,series_index:config?parsed.seriesIndex:null,next_section:config?(pageDone?parsed.nextSection:parsed.section):null,next_series_index:config?(pageDone?parsed.nextSeriesIndex:parsed.seriesIndex):null,category_index:config?parsed.categoryIndex:null,next_category_index:config?(pageDone?parsed.nextCategoryIndex:parsed.categoryIndex):null,done});
  }catch(e){
   const known=/^(SOURCE_HTTP_\d+|DATABASE_HTTP_\d+|SOURCE_TOO_LARGE|INVALID_M3U|EMPTY_M3U|HLS_MANIFEST_NOT_CATALOG|XTREAM_[A-Z_]+|INVALID_XTREAM_[A-Z_]+|HTTP_REQUIRES_EXPLICIT_APPROVAL)$/;
   const code=known.test(e.message)?e.message:'IMPORT_FAILED';

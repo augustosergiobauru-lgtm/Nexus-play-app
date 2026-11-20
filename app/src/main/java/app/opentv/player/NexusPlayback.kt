@@ -86,7 +86,7 @@ internal class NexusPlayback(
     }
 
     init {
-        require(Uri.parse(url).let { it.scheme == "https" && !it.host.isNullOrBlank() })
+        require(Uri.parse(url).let { it.scheme in setOf("http", "https") && !it.host.isNullOrBlank() })
         startExo()
         handler.post(tick)
     }
@@ -96,7 +96,11 @@ internal class NexusPlayback(
         val token = ++generation
         buffering = true
         waitingSince = System.currentTimeMillis()
-        exo = ExoPlayer.Builder(context).build().also { p ->
+        val http = androidx.media3.datasource.DefaultHttpDataSource.Factory()
+            .setUserAgent("NexusPlay/1.0 (Android)")
+            .setAllowCrossProtocolRedirects(true)
+        val mediaSources = androidx.media3.exoplayer.source.DefaultMediaSourceFactory(http)
+        exo = ExoPlayer.Builder(context).setMediaSourceFactory(mediaSources).build().also { p ->
             p.addListener(object : Player.Listener {
                 override fun onPlaybackStateChanged(state: Int) {
                     if (released || token != generation) return

@@ -33,6 +33,21 @@ const last=await loadXtream(server.href,credentials,'series',1);assert.equal(las
 emptySeries=true;const empty=await loadXtream(server.href,credentials,'series',0);assert.equal(empty.rows.length,0);assert.equal(empty.nextSection,null);passed++;console.log('PASS empty series catalog');
 rejectLogin=true;await assert.rejects(()=>loadXtream(server.href,credentials,'live'),/XTREAM_LOGIN_REJECTED/);passed++;console.log('PASS rejected login');
 
+
+rejectLogin=false;
+const categoryFetch=globalThis.fetch,selectedCategories=[];
+globalThis.fetch=async input=>{
+ const u=new URL(input),a=u.searchParams.get('action');
+ if(a==='get_vod_categories')return Response.json([{category_id:9,category_name:'B'},{category_id:2,category_name:'A'}]);
+ if(a==='get_vod_streams')selectedCategories.push(u.searchParams.get('category_id'));
+ return categoryFetch(input);
+};
+const firstCategory=await loadXtream(server.href,credentials,'movie',0,0);
+assert.equal(firstCategory.nextSection,'movie');assert.equal(firstCategory.nextCategoryIndex,1);passed++;console.log('PASS large movie catalog starts with bounded category');
+const lastCategory=await loadXtream(server.href,credentials,'movie',0,1);
+assert.equal(lastCategory.nextSection,'series');assert.equal(lastCategory.nextCategoryIndex,0);assert.deepEqual(selectedCategories,['2','9']);passed++;console.log('PASS movie category cursor preserves sorted categories');
+globalThis.fetch=categoryFetch;
+
 const providerFetch=globalThis.fetch;
 globalThis.Deno={env:{get:n=>n==='SUPABASE_URL'?'https://db.test':'test-key'},serve:()=>{},resolveDns:async()=>['93.184.216.34']};
 const {sha256}=await import('./parser.mjs');
@@ -62,4 +77,5 @@ const configResult=await handle(request({action:'configure_xtream',xtream:{serve
 assert.equal(configResult.status,200);assert.equal(providerCalls,before);assert.ok(!(await configResult.text()).includes(credentials.password));passed++;console.log('PASS admin configuration stores privately without calling provider');
 globalThis.fetch=realFetch;
 console.log(JSON.stringify({total_passed:passed}));
+
 
