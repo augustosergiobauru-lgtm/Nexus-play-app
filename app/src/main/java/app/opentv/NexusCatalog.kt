@@ -7,7 +7,7 @@ import java.io.IOException
 
 /** Metadata only; playback URLs are intentionally excluded. */
 class NexusCatalog(private val projectUrl: String, private val publishableKey: String) {
-    data class Item(val id: String, val title: String, val type: String, val categoryId: String?)
+    data class Item(val id: String, val title: String, val type: String, val categoryId: String?, val logoUrl: String? = null)
     private val client = OkHttpClient.Builder().followRedirects(false).followSslRedirects(false).build()
 
     data class Category(val id: String, val name: String)
@@ -41,7 +41,7 @@ class NexusCatalog(private val projectUrl: String, private val publishableKey: S
             require(base.isHttps)
             require(contentType == null || contentType in setOf("live", "movie", "series"))
             val builder = base.newBuilder()
-                .addQueryParameter("select", "id,title,content_type,category_id")
+                .addQueryParameter("select", "id,title,content_type,category_id,logo_url")
                 .addQueryParameter("is_active", "eq.true")
                 .addQueryParameter("order", "title.asc,id.asc")
                 .addQueryParameter("limit", "100")
@@ -67,7 +67,8 @@ class NexusCatalog(private val projectUrl: String, private val publishableKey: S
                                 val row = rows.getJSONObject(index)
                                 Item(row.getString("id"), row.getString("title"),
                                     row.getString("content_type"),
-                                    if (row.isNull("category_id")) null else row.getString("category_id"))
+                                    if (row.isNull("category_id")) null else row.getString("category_id"),
+                                    row.optString("logo_url").takeIf { it.isNotBlank() && it != "null" })
                             }
                         }
                     }

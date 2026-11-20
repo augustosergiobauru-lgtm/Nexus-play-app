@@ -1,5 +1,9 @@
 package app.opentv
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
@@ -41,6 +45,26 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
     val catalog = remember { NexusSupabase.catalog() }
     val handler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
     var items by remember(session) { mutableStateOf(emptyList<NexusCatalog.Item>()) }
+    var homeItems by remember(session.userId) { mutableStateOf(emptyList<NexusCatalog.Item>()) }
+    var homeFailed by remember { mutableStateOf(false) }
+    var homeLoading by remember { mutableStateOf(true) }
+    DisposableEffect(session) {
+        val alive = java.util.concurrent.atomic.AtomicBoolean(true)
+        var pending = 3
+        listOf("live", "movie", "series").forEach { type ->
+            catalog.page(session, contentType = type) { result ->
+                handler.post {
+                    if (alive.get()) {
+                        result.onSuccess { page -> homeItems = homeItems.filterNot { it.type == type } + page }
+                            .onFailure { homeFailed = true }
+                        pending--
+                        homeLoading = pending > 0
+                    }
+                }
+            }
+        }
+        onDispose { alive.set(false) }
+    }
     var liveCategories by remember { mutableStateOf(emptyList<NexusCatalog.Category>()) }
     var liveCategoryId by remember { mutableStateOf<String?>(null) }
     var categoryMenu by remember { mutableStateOf(false) }
@@ -148,7 +172,7 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
         loading = false
         error = null
         if (query.isNotBlank()) kotlinx.coroutines.delay(300)
-        if (selected != 4) loadPage()
+        if (selected in 1..3) loadPage()
     }
     androidx.activity.compose.BackHandler(enabled = seriesDetail != null) { seriesDetail = null }
     val currentPlayback = playingItem
@@ -226,7 +250,7 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
                         NavigationBarItem(
                             selected = selected == index,
                             onClick = { selected = index; seriesDetail = null; favoritesOnly = false; query = "" },
-                            icon = { Text(listOf("⌂", "▣", "▶", "▤", "⋯")[index], fontSize = 20.sp) },
+                            icon = { Icon(listOf(Icons.Filled.Home, Icons.Filled.LiveTv, Icons.Filled.Movie, Icons.Filled.VideoLibrary, Icons.Filled.MoreHoriz)[index], contentDescription = name) },
                             label = { Text(name, fontSize = 11.sp) },
                             colors = NavigationBarItemDefaults.colors(selectedIconColor = gold, selectedTextColor = gold, indicatorColor = Color(0xFF332A16), unselectedIconColor = Color.Gray, unselectedTextColor = Color.Gray)
                         )
@@ -235,9 +259,9 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
             }
         ) { padding ->
             Column(
-                Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp, vertical = 12.dp)
+                Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp, vertical = 6.dp)
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(18.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 val detail = seriesDetail
                 if (detail != null) {
@@ -260,7 +284,7 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
                     NexusBrandMark(Modifier.size(36.dp))
                     Spacer(Modifier.width(8.dp))
                     Text("NEXUS PLAY", color = gold, fontSize = 23.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                    TextButton(onClick = { selected = 4 }) { Text("☰", color = gold, fontSize = 22.sp) }
+                    IconButton(onClick = { selected = 4 }) { Icon(Icons.Filled.Menu, "Menu", tint = gold) }
                 }
                 if (playbackBusy) {
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = gold)
@@ -269,28 +293,20 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
                 playbackError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 if (selected != 0) Text(tabs[selected], style = MaterialTheme.typography.headlineSmall)
                 if (selected == 0) {
-                    Box(Modifier.fillMaxWidth().height(210.dp).background(Brush.verticalGradient(listOf(Color(0xFF302717), Color(0xFF101010))), RoundedCornerShape(16.dp)).padding(18.dp), contentAlignment = Alignment.BottomStart) {
-                        Column { Text("DESTAQUES", color = gold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            Text(items.firstOrNull()?.title ?: "Seu entretenimento em um só lugar", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                            Text(if (items.isEmpty()) "Catálogo aguardando conteúdo" else "Explore o catálogo", color = Color.LightGray)
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("O que vamos assistir?", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                            Text("Explore canais, filmes e séries", color = Color.LightGray, fontSize = 12.sp)
+                        }
+                        listOf("Ao Vivo", "Filmes", "Séries").forEachIndexed { index, label ->
+                            TextButton(onClick = { selected = index + 1 }) { Text(label, color = gold) }
                         }
                     }
-                }
-                if (selected == 0) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("Ao Vivo", "Filmes", "Séries", "Favoritos").forEachIndexed { index, label ->
-                            Column(Modifier.weight(1f).background(Color(0xFF191919), RoundedCornerShape(12.dp))
-                                .clickable { selected = if (index == 3) 1 else index + 1; favoritesOnly = index == 3; query = "" }
-                                .padding(vertical = 14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(listOf("▣", "▶", "▤", "★")[index], color = gold, fontSize = 25.sp)
-                                Spacer(Modifier.height(6.dp))
-                                Text(label, color = Color.White, fontSize = 11.sp)
-                            }
-                        }
-                    }
+                    if (homeLoading) LinearProgressIndicator(Modifier.fillMaxWidth(), color = gold)
+                    if (homeFailed) Text("Parte do catálogo não pôde ser carregada. Abra a categoria para tentar novamente.", color = Color.LightGray)
                 }
                 val sections = when (selected) {
-                    0 -> listOf("Continuar assistindo", "Lançamentos em Filmes", "Ao vivo", "Séries")
+                    0 -> listOf("Ao vivo", "Filmes", "Séries")
                     1 -> listOf("Categorias", "Favoritos", "Recentes")
                     2 -> listOf("Categorias de filmes", "Favoritos")
                     3 -> listOf("Categorias de séries", "Favoritos")
@@ -329,10 +345,10 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
                     visible.forEach { item ->
                         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(containerColor = if (selected == 1 && requestedLiveId == item.id) Color(0xFF332A16) else Color(0xFF151515))) {
                             Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                                Box(Modifier.size(44.dp).background(Color(0xFF302717), RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
-                                    Text(if (selected == 1) "▣" else "▶", color = gold, fontSize = 22.sp)
+                                Row(Modifier.weight(1f).clickable(enabled = selected == 1 || !playbackBusy) { play(item) }, verticalAlignment = Alignment.CenterVertically) {
+                                    NexusCatalogArtwork(item, Modifier.size(52.dp), contain = selected == 1)
+                                    Text(item.title, Modifier.weight(1f).padding(12.dp), color = Color.White)
                                 }
-                                Text(item.title, Modifier.weight(1f).clickable(enabled = selected == 1 || !playbackBusy) { play(item) }.padding(12.dp), color = Color.White)
                                 TextButton(onClick = {
                                     favorites = if (item.id in favorites) favorites - item.id else favorites + item.id
                                     prefs.edit().putStringSet("ids", favorites.toSet()).apply()
@@ -346,19 +362,23 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
                     if (more && !loading) Button(onClick = { loadPage() }) { Text("Carregar mais") }
                  } else if (selected == 0) {
                     sections.forEach { title ->
-                        Text(title, style = MaterialTheme.typography.titleMedium, color = Color.White, fontWeight = FontWeight.Bold)
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, color = Color.White, fontWeight = FontWeight.Bold)
+                            TextButton(onClick = { selected = when (title) { "Ao vivo" -> 1; "Filmes" -> 2; else -> 3 } }) { Text("Ver todos", color = gold) }
+                        }
                         val types = when(title) {
                             "Ao vivo" -> setOf("live", "channel", "tv")
-                            "Lançamentos em Filmes" -> setOf("movie", "film", "vod")
+                            "Filmes" -> setOf("movie", "film", "vod")
                             "Séries" -> setOf("series", "episode")
                             else -> emptySet()
                         }
-                        val entries = items.filter { it.type.lowercase() in types }.take(10)
+                        val entries = homeItems.filter { it.type.lowercase() in types }.take(10)
                         if (entries.isEmpty()) Text(if (types.isEmpty()) "Nenhuma reprodução recente" else "Conteúdo em breve", color = Color.Gray, fontSize = 13.sp)
                         else Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             entries.forEach { entry ->
-                                Box(Modifier.width(116.dp).height(146.dp).clickable(enabled = !playbackBusy) { play(entry) }.background(Color(0xFF1C1A16), RoundedCornerShape(10.dp)).padding(10.dp), contentAlignment = Alignment.BottomStart) {
-                                    Text(entry.title, color = Color.White, maxLines = 3)
+                                Column(Modifier.width(if (title == "Ao vivo") 120.dp else 104.dp).clickable(enabled = !playbackBusy) { play(entry) }) {
+                                    NexusCatalogArtwork(entry, Modifier.fillMaxWidth().height(if (title == "Ao vivo") 64.dp else 138.dp), contain = title == "Ao vivo")
+                                    Text(entry.title, Modifier.padding(top = 5.dp), color = Color.White, fontSize = 12.sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                                 }
                             }
                         }
@@ -405,6 +425,20 @@ private fun NexusLiveImmersive(fullscreen: Boolean) {
                     if (insets?.isVisible(type) != false) controller.show(type) else controller.hide(type)
                 }
             }
+        }
+    }
+}
+
+
+@Composable
+private fun NexusCatalogArtwork(item: NexusCatalog.Item, modifier: Modifier, contain: Boolean) {
+    Box(modifier.clip(RoundedCornerShape(10.dp)).background(Color(0xFF202020)), contentAlignment = Alignment.Center) {
+        Icon(if (contain) Icons.Filled.LiveTv else Icons.Filled.Movie, contentDescription = null,
+            tint = Color(0xFFE5C465), modifier = Modifier.size(28.dp))
+        if (!item.logoUrl.isNullOrBlank()) {
+            coil.compose.AsyncImage(model = item.logoUrl, contentDescription = item.title,
+                contentScale = if (contain) ContentScale.Fit else ContentScale.Crop,
+                modifier = Modifier.fillMaxSize().then(if (contain) Modifier.padding(6.dp) else Modifier))
         }
     }
 }
