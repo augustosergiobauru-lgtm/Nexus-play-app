@@ -22,6 +22,8 @@ fun NexusEntry() {
     if (current == null) {
         NexusLoginRoute(auth = auth, onAuthenticated = { session = it })
     } else {
+        var preview by remember(current) { mutableStateOf(false) }
+        var approved by remember(current) { mutableStateOf(false) }
         var message by remember(current) { mutableStateOf("Validando assinatura...") }
         DisposableEffect(current) {
             val active = java.util.concurrent.atomic.AtomicBoolean(true)
@@ -37,6 +39,7 @@ fun NexusEntry() {
                                         NexusSupabase.checkOwnDevice(current, deviceId) { approval ->
                                             handler.post {
                                                 if (active.get()) {
+                                                    approved = approval.getOrDefault(false)
                                                     message = approval.fold(
                                                         onSuccess = { if (it) "Assinatura e aparelho aprovados. Player em desenvolvimento." else "Aparelho aguardando aprovação administrativa." },
                                                         onFailure = { "Falha ao verificar o aparelho." }
@@ -57,7 +60,9 @@ fun NexusEntry() {
             }
             onDispose { active.set(false) }
         }
-        Column(
+        if (preview && approved) {
+            NexusHomeScreen(onExit = { session = null })
+        } else Column(
             modifier = Modifier.fillMaxSize().padding(24.dp),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
@@ -65,6 +70,7 @@ fun NexusEntry() {
             Text("Nexus Play")
             Text(message)
             Text("Código da instalação: " + (deviceId ?: "Indisponível"))
+            if (approved) Button(onClick = { preview = true }) { Text("Abrir prévia do Nexus Play") }
             Button(onClick = { session = null }) { Text("Voltar ao login") }
         }
     }
