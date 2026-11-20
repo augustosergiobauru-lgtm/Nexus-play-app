@@ -13,10 +13,39 @@ import androidx.compose.ui.unit.sp
 
 /** Empty-state UI preview; no catalog entitlement or playback is implied. */
 @Composable
-fun NexusHomeScreen(onExit: () -> Unit) {
+fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
     val gold = Color(0xFFE5C465)
     val tabs = listOf("Início", "Ao Vivo", "Filmes", "Séries", "Mais")
     var selected by remember { mutableStateOf(0) }
+    val catalog = remember { NexusSupabase.catalog() }
+    val handler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
+    var items by remember(session) { mutableStateOf(emptyList<NexusCatalog.Item>()) }
+    var query by remember { mutableStateOf("") }
+    var loading by remember { mutableStateOf(false) }
+    var more by remember { mutableStateOf(true) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val active = remember { java.util.concurrent.atomic.AtomicBoolean(true) }
+    DisposableEffect(Unit) {
+        active.set(true)
+        onDispose { active.set(false) }
+    }
+    fun loadPage() {
+        if (loading || !more) return
+        loading = true
+        error = null
+        catalog.page(session, items.size) { result ->
+            handler.post {
+                if (active.get()) {
+                    loading = false
+                    result.fold(onSuccess = { page ->
+                        items = items + page
+                        more = page.size == 100
+                    }, onFailure = { error = "Não foi possível carregar o catálogo." })
+                }
+            }
+        }
+    }
+    LaunchedEffect(session) { loadPage() }
     MaterialTheme(colorScheme = darkColorScheme(
         primary = gold, onPrimary = Color.Black,
         background = Color(0xFF080808), surface = Color(0xFF171717)
@@ -51,7 +80,23 @@ fun NexusHomeScreen(onExit: () -> Unit) {
                     3 -> listOf("Categorias de séries", "Favoritos")
                     else -> listOf("Minha conta", "Dispositivos")
                 }
-                sections.forEach { title ->
+                if (selected in 1..3) {
+                    OutlinedTextField(value = query, onValueChange = { query = it },
+                        label = { Text("Pesquisar títulos carregados") }, modifier = Modifier.fillMaxWidth())
+                    val accepted = when (selected) {
+                        1 -> setOf("live", "channel", "tv")
+                        2 -> setOf("movie", "film", "vod")
+                        else -> setOf("series", "episode")
+                    }
+                    val visible = items.filter { it.type.lowercase() in accepted && it.title.contains(query, ignoreCase = true) }
+                    visible.forEach { item ->
+                        Card(Modifier.fillMaxWidth()) { Text(item.title, Modifier.padding(16.dp)) }
+                    }
+                    if (visible.isEmpty() && !loading) Text("Nenhum título encontrado nesta página.")
+                    if (loading) CircularProgressIndicator()
+                    error?.let { Text(it) }
+                    if (more && !loading) Button(onClick = { loadPage() }) { Text("Carregar mais") }
+                } else sections.forEach { title ->
                     Text(title, style = MaterialTheme.typography.titleLarge, color = gold)
                     Card(Modifier.fillMaxWidth()) {
                         Text("Nenhum conteúdo disponível nesta prévia.", Modifier.padding(18.dp))
