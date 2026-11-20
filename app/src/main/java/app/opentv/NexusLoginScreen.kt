@@ -1,5 +1,9 @@
 package app.opentv
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -23,6 +27,7 @@ fun NexusLoginScreen(
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
     val gold = Color(0xFFE5C465)
     MaterialTheme(colorScheme = darkColorScheme(primary = gold, onPrimary = Color.Black,
         background = Color(0xFF080808), surface = Color(0xFF171717))) {
@@ -39,11 +44,20 @@ fun NexusLoginScreen(
                     modifier = Modifier.fillMaxWidth(), enabled = !loading)
                 OutlinedTextField(value = password, onValueChange = { password = it },
                     label = { Text("Senha") }, singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
+                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { passwordVisible = !passwordVisible }, enabled = !loading) {
+                            Icon(
+                                imageVector = if (passwordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                contentDescription = if (passwordVisible) "Ocultar senha" else "Mostrar senha",
+                                tint = gold
+                            )
+                        }
+                    },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     modifier = Modifier.fillMaxWidth(), enabled = !loading)
                 if (error != null) Text(error, color = MaterialTheme.colorScheme.error)
-                Button(onClick = { onLogin(email.trim(), password); password = "" },
+                Button(onClick = { onLogin(email.trim(), password); password = ""; passwordVisible = false },
                     enabled = !loading && email.isNotBlank() && password.isNotBlank(),
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                     if (loading) CircularProgressIndicator(Modifier.size(24.dp), color = Color.Black)
