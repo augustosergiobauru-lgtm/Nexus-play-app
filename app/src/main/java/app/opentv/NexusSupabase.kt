@@ -16,6 +16,8 @@ object NexusSupabase {
 
     fun auth() = NexusAuth(SUPABASE_URL, SUPABASE_ANON_KEY)
 
+    fun entitlement() = NexusEntitlement(SUPABASE_URL, SUPABASE_ANON_KEY)
+
     fun accessFlow() = NexusAccessFlow(
         NexusEntitlement(SUPABASE_URL, SUPABASE_ANON_KEY),
         NexusDeviceAccess(SUPABASE_URL, SUPABASE_ANON_KEY)
