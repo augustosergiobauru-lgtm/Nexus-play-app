@@ -17,7 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/** Empty-state UI preview; no catalog entitlement or playback is implied. */
+/** V1 catalog and playback; each item is authorized by the server before it opens. */
 @Composable
 fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
     var demo by remember { mutableStateOf(false) }
@@ -45,21 +45,56 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
     var favoritesOnly by remember { mutableStateOf(false) }
     var seriesDetail by remember(session.userId) { mutableStateOf<NexusCatalog.Item?>(null) }
 
+    val playbackAccess = remember { NexusSupabase.playbackAccess() }
+    var playingItem by remember(session.userId) { mutableStateOf<NexusCatalog.Item?>(null) }
+    var playbackUrl by remember(session.userId) { mutableStateOf<String?>(null) }
+    var playbackBusy by remember { mutableStateOf(false) }
+    var playbackError by remember { mutableStateOf<String?>(null) }
+    var playbackCall by remember { mutableStateOf<okhttp3.Call?>(null) }
+
     var loading by remember { mutableStateOf(false) }
+    var catalogGeneration by remember { mutableStateOf(0) }
     var more by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     val active = remember { java.util.concurrent.atomic.AtomicBoolean(true) }
     DisposableEffect(Unit) {
         active.set(true)
-        onDispose { active.set(false) }
+        onDispose { active.set(false); playbackCall?.cancel() }
+    }
+    fun play(item: NexusCatalog.Item) {
+        if (playbackBusy) return
+        playbackBusy = true
+        playbackError = null
+        try {
+            val installation = NexusInstallation.identifier(context)
+            playbackCall = playbackAccess.resolve(session, item.id, installation) { result ->
+                handler.post {
+                    if (active.get()) {
+                        playbackBusy = false
+                        result.fold(onSuccess = { url ->
+                            playbackUrl = url
+                            playingItem = item
+                        }, onFailure = {
+                            playbackError = it.message ?: "Não foi possível abrir o conteúdo."
+                        })
+                    }
+                }
+            }
+        } catch (_: Exception) {
+            playbackBusy = false
+            playbackError = "Não foi possível identificar ou autorizar este aparelho."
+        }
     }
     fun loadPage() {
         if (loading || !more) return
         loading = true
         error = null
-        catalog.page(session, items.size) { result ->
+        val generation = catalogGeneration
+        val contentType = when (selected) { 1 -> "live"; 2 -> "movie"; 3 -> "series"; else -> null }
+        catalog.page(session, items.size, contentType = contentType, query = query) { result ->
             handler.post {
                 if (active.get()) {
+                    if (generation != catalogGeneration) return@post
                     loading = false
                     result.fold(onSuccess = { page ->
                         items = items + page
@@ -69,8 +104,26 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
             }
         }
     }
-    LaunchedEffect(session) { loadPage() }
+    LaunchedEffect(session, selected, query) {
+        catalogGeneration++
+        items = emptyList()
+        more = true
+        loading = false
+        error = null
+        if (query.isNotBlank()) kotlinx.coroutines.delay(300)
+        if (selected != 4) loadPage()
+    }
     androidx.activity.compose.BackHandler(enabled = seriesDetail != null) { seriesDetail = null }
+    val currentPlayback = playingItem
+    val currentUrl = playbackUrl
+    if (currentPlayback != null && currentUrl != null) {
+        androidx.activity.compose.BackHandler { playingItem = null; playbackUrl = null }
+        NexusPlaybackScreen(session, currentPlayback, currentUrl) {
+            playingItem = null
+            playbackUrl = null
+        }
+        return
+    }
     MaterialTheme(colorScheme = darkColorScheme(
         primary = gold, onPrimary = Color.Black,
         background = Color(0xFF080808), surface = Color(0xFF171717)
@@ -119,6 +172,11 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
                     Text("NEXUS PLAY", color = gold, fontSize = 23.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                     TextButton(onClick = { selected = 4 }) { Text("☰", color = gold, fontSize = 22.sp) }
                 }
+                if (playbackBusy) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = gold)
+                    Text("Autorizando reprodução...", color = Color.LightGray)
+                }
+                playbackError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 if (selected != 0) Text(tabs[selected], style = MaterialTheme.typography.headlineSmall)
                 if (selected == 0) {
                     Box(Modifier.fillMaxWidth().height(210.dp).background(Brush.verticalGradient(listOf(Color(0xFF302717), Color(0xFF101010))), RoundedCornerShape(16.dp)).padding(18.dp), contentAlignment = Alignment.BottomStart) {
@@ -167,7 +225,7 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
                                 Box(Modifier.size(44.dp).background(Color(0xFF302717), RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
                                     Text(if (selected == 1) "▣" else "▶", color = gold, fontSize = 22.sp)
                                 }
-                                Text(item.title, Modifier.weight(1f).clickable(enabled = selected == 3) { seriesDetail = item }.padding(12.dp), color = Color.White)
+                                Text(item.title, Modifier.weight(1f).clickable(enabled = !playbackBusy) { play(item) }.padding(12.dp), color = Color.White)
                                 TextButton(onClick = {
                                     favorites = if (item.id in favorites) favorites - item.id else favorites + item.id
                                     prefs.edit().putStringSet("ids", favorites.toSet()).apply()
@@ -192,7 +250,7 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
                         if (entries.isEmpty()) Text(if (types.isEmpty()) "Nenhuma reprodução recente" else "Conteúdo em breve", color = Color.Gray, fontSize = 13.sp)
                         else Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             entries.forEach { entry ->
-                                Box(Modifier.width(116.dp).height(146.dp).background(Color(0xFF1C1A16), RoundedCornerShape(10.dp)).padding(10.dp), contentAlignment = Alignment.BottomStart) {
+                                Box(Modifier.width(116.dp).height(146.dp).clickable(enabled = !playbackBusy) { play(entry) }.background(Color(0xFF1C1A16), RoundedCornerShape(10.dp)).padding(10.dp), contentAlignment = Alignment.BottomStart) {
                                     Text(entry.title, color = Color.White, maxLines = 3)
                                 }
                             }
