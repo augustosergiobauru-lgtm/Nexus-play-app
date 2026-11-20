@@ -224,6 +224,8 @@ fun NexusHomeScreen(
         primary = gold, onPrimary = Color.Black,
         background = Color(0xFF080808), surface = Color(0xFF171717)
     )) {
+        val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+        val compactHome = selected == 0 && seriesDetail == null && configuration.screenWidthDp > configuration.screenHeightDp
         Scaffold(
             containerColor = Color(0xFF080808),
             bottomBar = {
@@ -242,8 +244,8 @@ fun NexusHomeScreen(
         ) { padding ->
             Column(
                 Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp, vertical = 6.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                    .then(if (compactHome) Modifier else Modifier.verticalScroll(rememberScrollState())),
+                verticalArrangement = Arrangement.spacedBy(if (compactHome) 4.dp else 10.dp)
             ) {
                 val detail = seriesDetail
                 if (detail != null) {
@@ -281,7 +283,8 @@ fun NexusHomeScreen(
                         onOpen = { entry ->
                             if (entry.type == "series") { selected = 3; seriesDetail = entry } else play(entry)
                         },
-                        onBrowse = { selected = it }
+                        onBrowse = { selected = it },
+                        modifier = if (compactHome) Modifier.fillMaxWidth().weight(1f) else Modifier.fillMaxWidth()
                     )
                 }
                 val sections = when (selected) {
