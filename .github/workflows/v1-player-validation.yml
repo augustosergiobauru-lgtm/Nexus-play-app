@@ -36,6 +36,18 @@ jobs:
           profile: pixel_2
           disable-animations: true
           script: ./gradlew connectedDebugAndroidTest --stacktrace
+      - name: Collect home screenshot
+        if: always()
+        run: |
+          mkdir -p home-screenshots
+          adb pull /sdcard/Android/data/app.opentv.debug/files/home-landscape.png home-screenshots/ || true
+      - name: Upload home screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nexus-Home-Screenshot
+          path: home-screenshots/
+          if-no-files-found: ignore
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:

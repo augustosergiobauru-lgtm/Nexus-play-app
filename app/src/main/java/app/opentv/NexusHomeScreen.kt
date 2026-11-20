@@ -28,7 +28,11 @@ import androidx.compose.ui.unit.sp
 
 /** V1 catalog and playback; each item is authorized by the server before it opens. */
 @Composable
-fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
+fun NexusHomeScreen(
+    session: NexusAuth.Session,
+    onExit: () -> Unit,
+    catalog: NexusCatalog = remember { NexusSupabase.catalog() }
+) {
     var demo by remember { mutableStateOf(false) }
     var hlsDemo by remember { mutableStateOf(false) }
     if (demo) {
@@ -44,17 +48,19 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
     val gold = Color(0xFFE5C465)
     val tabs = listOf("Início", "Ao Vivo", "Filmes", "Séries", "Mais")
     var selected by remember { mutableStateOf(0) }
-    val catalog = remember { NexusSupabase.catalog() }
     val handler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
     var items by remember(session) { mutableStateOf(emptyList<NexusCatalog.Item>()) }
     var homeItems by remember(session.userId) { mutableStateOf(emptyList<NexusCatalog.Item>()) }
     var homeFailed by remember { mutableStateOf(false) }
     var homeLoading by remember { mutableStateOf(true) }
-    DisposableEffect(session) {
+    var homeRetry by remember { mutableStateOf(0) }
+    DisposableEffect(session, homeRetry) {
+        homeFailed = false
+        homeLoading = true
         val alive = java.util.concurrent.atomic.AtomicBoolean(true)
         var pending = 2
         listOf("movie", "series").forEach { type ->
-            catalog.page(session, contentType = type, recentlyAdded = type != "live") { result ->
+            catalog.page(session, contentType = type, recentlyAdded = true, pageSize = 48) { result ->
                 handler.post {
                     if (alive.get()) {
                         result.onSuccess { page -> homeItems = homeItems.filterNot { it.type == type } + page }
@@ -269,58 +275,14 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
                 playbackError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 if (selected != 0) Text(tabs[selected], style = MaterialTheme.typography.headlineSmall)
                 if (selected == 0) {
-                    val movies = homeItems.filter { it.type == "movie" }.take(6)
-                    val series = homeItems.filter { it.type == "series" }.take(6)
-                    val highlights = (0 until maxOf(movies.size, series.size)).flatMap { index ->
-                        listOfNotNull(movies.getOrNull(index), series.getOrNull(index))
-                    }
-                    if (highlights.isNotEmpty()) {
-                        val pager = rememberPagerState(pageCount = { highlights.size })
-                        HorizontalPager(state = pager, modifier = Modifier.fillMaxWidth(), key = { highlights[it].id }) { index ->
-                            val featured = highlights[index]
-                            Box(Modifier.fillMaxWidth().height(238.dp).clip(RoundedCornerShape(16.dp))
-                                .background(Color(0xFF171717))) {
-                                if (!featured.logoUrl.isNullOrBlank()) {
-                                    coil.compose.AsyncImage(model = featured.logoUrl, contentDescription = null,
-                                        contentScale = ContentScale.Crop, alignment = Alignment.CenterEnd,
-                                        modifier = Modifier.fillMaxHeight().fillMaxWidth(.58f).align(Alignment.CenterEnd))
-                                }
-                                Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(
-                                    Color(0xFF080808), Color(0xFF080808).copy(alpha = .88f),
-                                    Color(0xFF080808).copy(alpha = .08f)))))
-                                Column(Modifier.fillMaxHeight().fillMaxWidth(.65f).padding(20.dp),
-                                    verticalArrangement = Arrangement.Center) {
-                                    Text(if (featured.type == "series") "SÉRIE EM DESTAQUE" else "FILME EM DESTAQUE",
-                                        color = gold, fontSize = 10.sp, fontWeight = FontWeight.Medium)
-                                    Spacer(Modifier.height(8.dp))
-                                    Text(featured.title, color = Color.White, fontSize = 25.sp,
-                                        fontWeight = FontWeight.Bold, maxLines = 2,
-                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                                    Spacer(Modifier.height(8.dp))
-                                    Text(featured.synopsis ?: "Sinopse não disponível no catálogo.",
-                                        color = Color(0xFFD0D0D0), fontSize = 12.sp, maxLines = 2,
-                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                                    Spacer(Modifier.height(10.dp))
-                                    Button(enabled = !playbackBusy,
-                                        onClick = { if (featured.type == "series") { selected = 3; seriesDetail = featured } else play(featured) },
-                                        shape = RoundedCornerShape(8.dp),
-                                        colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black)) {
-                                        Text(if (featured.type == "series") "Ver série" else "Assistir")
-                                    }
-                                }
-                            }
-                        }
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                            highlights.indices.forEach { index ->
-                                Box(Modifier.padding(3.dp).size(if (pager.currentPage == index) 7.dp else 5.dp)
-                                    .clip(RoundedCornerShape(50)).background(if (pager.currentPage == index) gold else Color.DarkGray))
-                            }
-                        }
-                    } else if (!homeLoading) {
-                        Text("Filmes e séries aparecerão aqui quando estiverem disponíveis no catálogo.", color = Color.LightGray)
-                    }
-                    if (homeLoading) LinearProgressIndicator(Modifier.fillMaxWidth(), color = gold)
-                    if (homeFailed) Text("Parte do catálogo não pôde ser carregada. Abra a categoria para tentar novamente.", color = Color.LightGray)
+                    NexusHomeDashboard(
+                        items = homeItems, loading = homeLoading, failed = homeFailed,
+                        busy = playbackBusy, onRetry = { homeRetry++ },
+                        onOpen = { entry ->
+                            if (entry.type == "series") { selected = 3; seriesDetail = entry } else play(entry)
+                        },
+                        onBrowse = { selected = it }
+                    )
                 }
                 val sections = when (selected) {
                     0 -> listOf("Filmes • Novidades", "Séries • Novidades")
@@ -378,32 +340,7 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
                     error?.let { Text(it) }
                     if (more && !loading) Button(onClick = { loadPage() }) { Text("Carregar mais") }
                  } else if (selected == 0) {
-                    sections.forEach { title ->
-                        Spacer(Modifier.height(6.dp))
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, color = Color.White, fontWeight = FontWeight.Bold)
-                            TextButton(onClick = { selected = when (title) { "Ao vivo" -> 1; "Filmes • Novidades" -> 2; else -> 3 } }) { Text("Ver todos", color = gold) }
-                        }
-                        if (title != "Ao vivo") Text("Adicionados recentemente ao catálogo", color = Color(0xFF909090), fontSize = 11.sp)
-                        val types = when(title) {
-                            "Ao vivo" -> setOf("live", "channel", "tv")
-                            "Filmes • Novidades" -> setOf("movie", "film", "vod")
-                            "Séries • Novidades" -> setOf("series", "episode")
-                            else -> emptySet()
-                        }
-                        val entries = homeItems.filter { it.type.lowercase() in types }.take(10)
-                        if (entries.isEmpty()) Text(if (types.isEmpty()) "Nenhuma reprodução recente" else "Conteúdo em breve", color = Color.Gray, fontSize = 13.sp)
-                        else Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                            entries.forEach { entry ->
-                                Column(Modifier.width(118.dp).clickable(enabled = !playbackBusy) { if (entry.type == "series") { selected = 3; seriesDetail = entry } else play(entry) }) {
-                                    NexusCatalogArtwork(entry, Modifier.fillMaxWidth().height(if (title == "Ao vivo") 64.dp else 162.dp), contain = title == "Ao vivo")
-                                    Text(entry.title, Modifier.padding(top = 5.dp), color = Color.White, fontSize = 12.sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                                }
-                            }
-                        }
-                    }
-                    if (loading) CircularProgressIndicator()
-                    error?.let { Text(it) }
+                    // Home sections are rendered together by NexusHomeDashboard.
                 } else {
                     Text("Minha conta", color = gold)
                     Text("Dispositivo autorizado", color = Color.LightGray)
