@@ -27,7 +27,7 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
         NexusPlaybackScreen(
             session = session,
             item = NexusCatalog.Item(if (hlsDemo) "public-demo-hls" else "public-demo-bbb", "Big Buck Bunny — demonstração", "movie", null),
-            authorizedUrl = if (hlsDemo) "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8" else "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+            authorizedUrl = if (hlsDemo) "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8" else "https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
             onClose = { demo = false }
         )
         return
