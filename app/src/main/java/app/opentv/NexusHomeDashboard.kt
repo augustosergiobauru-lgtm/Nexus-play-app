@@ -140,7 +140,10 @@ internal fun NexusHomeDashboard(
     if (landscape) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(18.dp), content = rails)
     } else {
-        Row(Modifier.fillMaxWidth()) {\n            val rowScope = this\n            Column { rails(rowScope) }\n        }
+        Row(Modifier.fillMaxWidth()) {
+            val rowScope = this
+            Column { rails(rowScope) }
+        }
     }
     }
     }
