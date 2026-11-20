@@ -38,9 +38,10 @@ fun NexusPlaybackScreen(session: NexusAuth.Session, item: NexusCatalog.Item, aut
             authorizedUrl = authorizedUrl,
             modifier = Modifier.fillMaxSize(),
             resumePositionMs = position,
+            isLive = item.type.lowercase() in setOf("live", "channel", "tv"),
             onProgress = { progress -> history.record(item.id, item.title, progress) }
         )
-        Surface(modifier = Modifier.align(Alignment.BottomEnd).padding(end = 8.dp, bottom = 48.dp), color = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.65f)) {
+        Surface(modifier = Modifier.align(Alignment.BottomEnd).padding(end = 8.dp, bottom = 88.dp), color = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.65f)) {
             IconButton(onClick = { expanded = !expanded }) {
                 Icon(if (expanded) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen, contentDescription = if (expanded) "Sair da tela cheia" else "Tela cheia", tint = Color(0xFFE5C465))
             }

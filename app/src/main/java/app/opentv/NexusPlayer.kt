@@ -1,108 +1,112 @@
 package app.opentv
 
 import android.net.Uri
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.unit.dp
-import androidx.media3.common.Player
-import androidx.media3.common.PlaybackException
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.media3.common.MediaItem
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.PlayerView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import app.opentv.player.NexusPlayback
 
-/** Only mount after server-side playback authorization. */
+/** Mounted only after the existing subscription and device authorization gate. */
 @Composable
-fun NexusPlayer(authorizedUrl: String, modifier: Modifier = Modifier, resumePositionMs: Long = 0L, onProgress: (Long) -> Unit = {}) {
+fun NexusPlayer(authorizedUrl: String, modifier: Modifier = Modifier, resumePositionMs: Long = 0L,
+                isLive: Boolean = false, onProgress: (Long) -> Unit = {}) {
     val context = LocalContext.current
     val uri = remember(authorizedUrl) { Uri.parse(authorizedUrl) }
     if (uri.scheme != "https" || uri.host.isNullOrBlank()) return
     val progressCallback by rememberUpdatedState(onProgress)
-    val player = remember(context, authorizedUrl) {
-        ExoPlayer.Builder(context).build().apply {
-            setMediaItem(MediaItem.fromUri(uri))
-            if (resumePositionMs > 0L) seekTo(resumePositionMs)
-            prepare()
-            playWhenReady = false
-        }
+    val session = remember(context, authorizedUrl, isLive) {
+        NexusPlayback(context, authorizedUrl, resumePositionMs, isLive) { progressCallback(it) }
     }
-    var error by remember(player) { mutableStateOf<String?>(null) }
-    var buffering by remember(player) { mutableStateOf(player.playbackState == Player.STATE_BUFFERING) }
-    var retries by remember(player) { mutableStateOf(0) }
-    LaunchedEffect(error) {
-        if (error != null && retries < 2 && player.playerError?.errorCode in setOf(PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED, PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT)) {
-            kotlinx.coroutines.delay(1500L * (retries + 1))
-            retries++
-            error = null
-            player.prepare()
-            player.play()
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(session, lifecycle) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_STOP -> session.setForeground(false)
+                Lifecycle.Event.ON_START -> session.setForeground(true)
+                else -> Unit
+            }
         }
+        lifecycle.addObserver(observer)
+        session.setForeground(lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED))
+        onDispose { lifecycle.removeObserver(observer); session.release() }
     }
-    DisposableEffect(player) {
-        var started = false
-        val handler = android.os.Handler(android.os.Looper.getMainLooper())
-        val tick = object : Runnable {
-            override fun run() {
-                if (player.isPlaying) {
-                    started = true
-                    progressCallback(player.currentPosition.coerceAtLeast(0L))
+    var panel by remember { mutableStateOf<String?>(null) }
+    var scrub by remember { mutableStateOf<Float?>(null) }
+    val gold = Color(0xFFE5C465)
+    MaterialTheme(colorScheme = darkColorScheme(primary = gold, onPrimary = Color.Black, surface = Color(0xFF171717))) {
+        Box(modifier.background(Color.Black)) {
+            key(session, session.surfaceRevision, session.engine) {
+                AndroidView(modifier = Modifier.fillMaxSize(), factory = { session.surface() })
+            }
+            if (session.buffering && session.error == null) CircularProgressIndicator(Modifier.align(Alignment.Center), color = gold)
+            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color.Black.copy(alpha = .70f))) {
+                if (session.seekable && session.duration > 0) {
+                    Slider(value = scrub ?: session.position.toFloat().coerceIn(0f, session.duration.toFloat()),
+                        onValueChange = { scrub = it },
+                        onValueChangeFinished = { scrub?.let { session.seek(it.toLong()) }; scrub = null },
+                        valueRange = 0f..session.duration.toFloat(), modifier = Modifier.fillMaxWidth().height(22.dp).padding(horizontal = 12.dp))
                 }
-                handler.postDelayed(this, 5000L)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = session::togglePlay, enabled = session.error == null) {
+                        Icon(if (session.playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            if (session.playing) "Pausar" else "Reproduzir", tint = gold)
+                    }
+                    IconButton(onClick = { session.seek(session.position - 15_000L) }, enabled = session.seekable) { Icon(Icons.Default.Replay10, "Voltar 15 segundos") }
+                    IconButton(onClick = { session.seek(session.position + 15_000L) }, enabled = session.seekable) { Icon(Icons.Default.Forward10, "Avançar 15 segundos") }
+                    Text(if (isLive) "AO VIVO" else timeLabel(session.position), Modifier.weight(1f), style = MaterialTheme.typography.labelSmall)
+                    IconButton(onClick = session::toggleMute) { Icon(if (session.muted) Icons.Default.VolumeOff else Icons.Default.VolumeUp, "Ativar ou silenciar áudio") }
+                    IconButton(onClick = { panel = "Opções" }) { Icon(Icons.Default.Settings, "Opções de reprodução") }
+                }
             }
-        }
-        val listener = object : androidx.media3.common.Player.Listener {
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                buffering = playbackState == Player.STATE_BUFFERING
-            }
-            override fun onPlayerError(failure: PlaybackException) {
-                buffering = false
-                error = failure.errorCodeName
-            }
-            override fun onIsPlayingChanged(isPlaying: Boolean) {
-                if (isPlaying) started = true
-                if (started) progressCallback(player.currentPosition.coerceAtLeast(0L))
-            }
-        }
-        player.addListener(listener)
-        buffering = player.playbackState == Player.STATE_BUFFERING
-        error = player.playerError?.errorCodeName
-        handler.post(tick)
-        onDispose {
-            handler.removeCallbacks(tick)
-            player.removeListener(listener)
-            if (started) progressCallback(player.currentPosition.coerceAtLeast(0L))
-            player.release()
-        }
-    }
-    Box(modifier) {
-        AndroidView(
-            modifier = Modifier.fillMaxSize(),
-            factory = { PlayerView(it).apply { this.player = player } },
-            update = { it.player = player }
-        )
-        if (buffering && error == null) {
-            CircularProgressIndicator(Modifier.align(Alignment.Center))
-        }
-        error?.let { code ->
-            Surface(Modifier.align(Alignment.Center).padding(8.dp)) {
-                Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(when (code) {
-                        "ERROR_CODE_IO_BAD_HTTP_STATUS" -> "O servidor recusou a reprodução (HTTP ${generateSequence<Throwable>(player.playerError) { it.cause }.filterIsInstance<androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException>().firstOrNull()?.responseCode?.toString() ?: "desconhecido"}). Verifique a disponibilidade do vídeo."
-                        "ERROR_CODE_IO_NETWORK_CONNECTION_FAILED", "ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT" -> "Falha de conexão. Verifique sua internet."
-                        else -> "Falha na reprodução: $code"
-                    })
-                    Button(onClick = {
-                        retries = 0
-                        error = null
-                        player.prepare()
-                        player.play()
-                    }) { Text("Tentar novamente") }
+            session.error?.let { message ->
+                Surface(Modifier.align(Alignment.Center).padding(12.dp)) {
+                    Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(message)
+                        Button(onClick = session::retry) { Text("Tentar novamente") }
+                    }
                 }
             }
         }
+        panel?.let { title ->
+            AlertDialog(onDismissRequest = { panel = null }, title = { Text(title) },
+                text = {
+                    Column {
+                        when (title) {
+                            "Áudio", "Legendas" -> {
+                                val text = title == "Legendas"
+                                val tracks = if (text) session.subtitles else session.audioTracks
+                                if (text) TextButton(onClick = { session.selectTrack(-1, true); panel = null }) { Text("Desativar legendas") }
+                                tracks.forEach { track -> TextButton(onClick = { session.selectTrack(track.id, text); panel = null }) { Text(track.label) } }
+                                if (tracks.isEmpty()) Text("Nenhuma faixa disponível nesta transmissão.")
+                            }
+                            "Velocidade" -> listOf(.5f, 1f, 1.5f, 2f).forEach { rate ->
+                                TextButton(onClick = { session.setSpeed(rate); panel = null }) { Text("${rate}x") }
+                            }
+                            else -> {
+                                TextButton(onClick = { panel = "Áudio" }) { Text("Áudio") }
+                                TextButton(onClick = { panel = "Legendas" }) { Text("Legendas") }
+                                TextButton(onClick = { panel = "Velocidade" }) { Text("Velocidade: ${session.speed}x") }
+                            }
+                        }
+                    }
+                }, confirmButton = { TextButton(onClick = { panel = null }) { Text("Fechar") } })
+        }
     }
+}
+
+private fun timeLabel(ms: Long): String {
+    val seconds = ms / 1000
+    return "%d:%02d".format(seconds / 60, seconds % 60)
 }

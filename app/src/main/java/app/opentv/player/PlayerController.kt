@@ -246,7 +246,7 @@ class PlayerController(
                     if (consecutiveFailures < MAX_AUTO_RESTARTS && request != null) {
                         scope.launch {
                             delay(AUTO_RESTART_DELAY_MILLIS)
-                            if (current == request) play(request, debounce = false)
+                            if (current === request) playInternal(request, debounce = false, resetFailures = false)
                         }
                     }
                 }
@@ -260,6 +260,10 @@ class PlayerController(
      * that rapid presses collapse into a single tune. Pass false for a deliberate selection.
      */
     fun play(request: Request, debounce: Boolean = true) {
+        playInternal(request, debounce, resetFailures = true)
+    }
+
+    private fun playInternal(request: Request, debounce: Boolean, resetFailures: Boolean) {
         // Cancelling here is what makes fast channel-changing safe: the previous switch never
         // reaches the player, so we never stack prepares.
         switchJob?.cancel()
@@ -268,7 +272,7 @@ class PlayerController(
         switchJob = scope.launch {
             if (debounce) delay(switchDebounceMillis)
 
-            consecutiveFailures = 0
+            if (resetFailures) consecutiveFailures = 0
             httpFactory.setDefaultRequestProperties(mapOf("User-Agent" to request.userAgent))
             _state.value = State.Buffering(request.title)
 
