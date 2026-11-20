@@ -14,6 +14,8 @@ object NexusSupabase {
     private const val SUPABASE_ANON_KEY =
         "sb_publishable_iU6tvWzwe5Ib0z6kOnyx6w_St2a663h"
 
+    fun catalog() = NexusCatalog(SUPABASE_URL, SUPABASE_ANON_KEY)
+
     fun auth() = NexusAuth(SUPABASE_URL, SUPABASE_ANON_KEY)
 
     fun entitlement() = NexusEntitlement(SUPABASE_URL, SUPABASE_ANON_KEY)
