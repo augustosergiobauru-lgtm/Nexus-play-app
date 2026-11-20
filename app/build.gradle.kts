@@ -14,7 +14,7 @@ android {
         applicationId = "app.opentv"
         minSdk = 23
         targetSdk = 35
-        versionCode = 22
+        versionCode = providers.environmentVariable("GITHUB_RUN_NUMBER").orNull?.toIntOrNull()?.let { 22 + it } ?: 22
         versionName = "0.11.10"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -63,6 +63,9 @@ android {
         }
         debug {
             applicationIdSuffix = ".debug"
+            if (providers.environmentVariable("KEYSTORE_PATH").orNull != null) {
+                signingConfig = signingConfigs.getByName("upload")
+            }
             isMinifyEnabled = false
         }
     }
