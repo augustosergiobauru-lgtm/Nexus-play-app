@@ -1,7 +1,6 @@
 package app.opentv
 
 import android.content.pm.ActivityInfo
-import android.graphics.Bitmap
 import androidx.activity.compose.setContent
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -21,7 +20,6 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import java.io.File
 
 /** Real catalog metadata; no tokens, provider credentials or playable URLs in fixtures. */
 @RunWith(AndroidJUnit4::class)
@@ -72,11 +70,11 @@ class HomeVisualTest {
         rule.onAllNodesWithText("Ao Vivo").assertCountEquals(1)
         rule.waitForIdle()
         Thread.sleep(2000)
-        val output = File(rule.activity.getExternalFilesDir(null), "home-landscape.png")
-        instrumentation.uiAutomation.takeScreenshot().let { bitmap ->
-            output.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
-            bitmap.recycle()
-        }
+        // Public Downloads survives the test runner uninstalling the target APK.
+        val screenshot = instrumentation.uiAutomation.executeShellCommand(
+            "screencap -p /sdcard/Download/nexus-home-landscape.png"
+        )
+        android.os.ParcelFileDescriptor.AutoCloseInputStream(screenshot).use { it.readBytes() }
         rule.onNodeWithTag("home-highlights").performTouchInput { swipeLeft() }
         rule.waitForIdle()
         val cleanTitle = series.getString("title").replace(Regex("\\s+S\\d+E\\d+.*$", RegexOption.IGNORE_CASE), "")
