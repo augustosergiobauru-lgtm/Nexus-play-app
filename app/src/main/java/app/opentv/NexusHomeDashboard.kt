@@ -10,11 +10,14 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -69,12 +72,23 @@ internal fun NexusHomeDashboard(
         val item = highlights[index]
         Box(Modifier.fillMaxWidth().height(heroHeight)
             .clip(RoundedCornerShape(16.dp)).background(Color(0xFF1B1A17))) {
+            // Fill the banner with atmosphere; keep the actual artwork fully visible.
             AsyncImage(model = item.logoUrl, contentDescription = null,
-                contentScale = ContentScale.Crop, alignment = Alignment.TopCenter,
-                modifier = Modifier.fillMaxHeight().fillMaxWidth(if (landscape) .64f else 1f).align(Alignment.CenterEnd))
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize().blur(24.dp))
+            var artworkIsWide by remember(item.logoUrl) { mutableStateOf(false) }
+            AsyncImage(model = item.logoUrl, contentDescription = null,
+                contentScale = ContentScale.Fit, alignment = Alignment.CenterEnd,
+                onSuccess = { state ->
+                    val size = state.painter.intrinsicSize
+                    artworkIsWide = size.width > size.height
+                },
+                modifier = Modifier.fillMaxHeight()
+                    .fillMaxWidth(if (artworkIsWide) .78f else if (landscape) .38f else .58f)
+                    .align(Alignment.CenterEnd))
             Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(
-                Color(0xFF0C0C0C), Color(0xFF0C0C0C).copy(alpha = .94f),
-                Color(0xFF0C0C0C).copy(alpha = .34f), Color.Transparent))))
+                Color(0xFF0C0C0C).copy(alpha = .98f), Color(0xFF0C0C0C).copy(alpha = .88f),
+                Color(0xFF0C0C0C).copy(alpha = .24f), Color.Transparent))))
             Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xFF0C0C0C).copy(alpha = .8f)))))
             Column(Modifier.fillMaxHeight().fillMaxWidth(if (landscape) .60f else .88f).padding(if (landscape) 8.dp else 20.dp),
                 verticalArrangement = Arrangement.Center) {
@@ -115,11 +129,17 @@ internal fun NexusHomeDashboard(
         }
     }
     val rails: @Composable RowScope.() -> Unit = {
-    listOf(Triple("Filmes • Novidades", movies, 2), Triple("Séries • Novidades", series, 3)).forEach { (title, entries, tab) ->
+    listOf(Triple("FILMES EM DESTAQUE", movies, 2), Triple("SÉRIES EM DESTAQUE", series, 3)).forEach { (title, entries, tab) ->
         if (entries.isNotEmpty()) {
             Column(if (landscape) Modifier.weight(1f).height(railHeight) else Modifier.fillMaxWidth()) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(title, color = Color.White, fontSize = if (landscape) 14.sp else 17.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Icon(if (tab == 2) Icons.Filled.Movie else Icons.Filled.Tv, contentDescription = null,
+                        tint = HomeGold, modifier = Modifier.size(if (landscape) 20.dp else 22.dp))
+                    Text(title, color = HomeGold, fontSize = if (landscape) 13.sp else 15.sp,
+                        fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
                 TextButton(onClick = { onBrowse(tab) }, modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)) { Text("Ver todos  ›", color = HomeGold, fontSize = 12.sp) }
             }
             LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth().testTag("home-rail-$tab")) {
