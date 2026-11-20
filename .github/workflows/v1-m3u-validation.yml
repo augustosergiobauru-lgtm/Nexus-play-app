@@ -11,4 +11,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: node supabase/functions/import-m3u/import.test.mjs
+      - run: |
+          node supabase/functions/import-m3u/import.test.mjs
+          node supabase/functions/import-m3u/xtream.test.mjs
