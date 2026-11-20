@@ -43,6 +43,7 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
     val prefs = remember(session.userId) { context.getSharedPreferences("nexus_favorites_" + session.userId, android.content.Context.MODE_PRIVATE) }
     var favorites by remember(session.userId) { mutableStateOf(prefs.getStringSet("ids", emptySet())?.toSet() ?: emptySet()) }
     var favoritesOnly by remember { mutableStateOf(false) }
+    var seriesDetail by remember(session.userId) { mutableStateOf<NexusCatalog.Item?>(null) }
 
     var loading by remember { mutableStateOf(false) }
     var more by remember { mutableStateOf(true) }
@@ -69,6 +70,7 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
         }
     }
     LaunchedEffect(session) { loadPage() }
+    androidx.activity.compose.BackHandler(enabled = seriesDetail != null) { seriesDetail = null }
     MaterialTheme(colorScheme = darkColorScheme(
         primary = gold, onPrimary = Color.Black,
         background = Color(0xFF080808), surface = Color(0xFF171717)
@@ -80,7 +82,7 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
                     tabs.forEachIndexed { index, name ->
                         NavigationBarItem(
                             selected = selected == index,
-                            onClick = { selected = index; favoritesOnly = false; query = "" },
+                            onClick = { selected = index; seriesDetail = null; favoritesOnly = false; query = "" },
                             icon = { Text(listOf("⌂", "▣", "▶", "▤", "⋯")[index], fontSize = 20.sp) },
                             label = { Text(name, fontSize = 11.sp) },
                             colors = NavigationBarItemDefaults.colors(selectedIconColor = gold, selectedTextColor = gold, indicatorColor = Color(0xFF332A16), unselectedIconColor = Color.Gray, unselectedTextColor = Color.Gray)
@@ -94,6 +96,23 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(18.dp)
             ) {
+                val detail = seriesDetail
+                if (detail != null) {
+                    TextButton(onClick = { seriesDetail = null }) { Text("‹ Voltar", color = gold) }
+                    Box(Modifier.fillMaxWidth().height(220.dp).background(Brush.verticalGradient(listOf(Color(0xFF332A16), Color(0xFF101010))), RoundedCornerShape(14.dp)).padding(18.dp), contentAlignment = Alignment.BottomStart) {
+                        Text(detail.title, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Text("Série", color = gold)
+                    OutlinedButton(onClick = {
+                        favorites = if (detail.id in favorites) favorites - detail.id else favorites + detail.id
+                        prefs.edit().putStringSet("ids", favorites.toSet()).apply()
+                    }) { Text(if (detail.id in favorites) "★ Na minha lista" else "☆ Minha lista") }
+                    Text("Episódios", color = gold, fontWeight = FontWeight.Bold)
+                    Text("Temporadas e episódios ainda não disponíveis no catálogo.", color = Color.LightGray)
+                    Text("Sobre", color = gold, fontWeight = FontWeight.Bold)
+                    Text("Sinopse não disponível.", color = Color.LightGray)
+                    return@Column
+                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     NexusBrandMark(Modifier.size(36.dp))
                     Spacer(Modifier.width(8.dp))
@@ -148,7 +167,7 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
                                 Box(Modifier.size(44.dp).background(Color(0xFF302717), RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
                                     Text(if (selected == 1) "▣" else "▶", color = gold, fontSize = 22.sp)
                                 }
-                                Text(item.title, Modifier.weight(1f).padding(12.dp), color = Color.White)
+                                Text(item.title, Modifier.weight(1f).clickable(enabled = selected == 3) { seriesDetail = item }.padding(12.dp), color = Color.White)
                                 TextButton(onClick = {
                                     favorites = if (item.id in favorites) favorites - item.id else favorites + item.id
                                     prefs.edit().putStringSet("ids", favorites.toSet()).apply()
