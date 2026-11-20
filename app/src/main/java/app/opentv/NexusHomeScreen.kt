@@ -1,6 +1,7 @@
 package app.opentv
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Alignment
@@ -79,7 +80,7 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
                     tabs.forEachIndexed { index, name ->
                         NavigationBarItem(
                             selected = selected == index,
-                            onClick = { selected = index },
+                            onClick = { selected = index; favoritesOnly = false; query = "" },
                             icon = { Text(listOf("⌂", "▣", "▶", "▤", "⋯")[index], fontSize = 20.sp) },
                             label = { Text(name, fontSize = 11.sp) },
                             colors = NavigationBarItemDefaults.colors(selectedIconColor = gold, selectedTextColor = gold, indicatorColor = Color(0xFF332A16), unselectedIconColor = Color.Gray, unselectedTextColor = Color.Gray)
@@ -96,7 +97,8 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("△", color = gold, fontSize = 32.sp)
                     Spacer(Modifier.width(8.dp))
-                    Text("NEXUS PLAY", color = gold, fontSize = 23.sp, fontWeight = FontWeight.Bold)
+                    Text("NEXUS PLAY", color = gold, fontSize = 23.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { selected = 4 }) { Text("☰", color = gold, fontSize = 22.sp) }
                 }
                 if (selected != 0) Text(tabs[selected], style = MaterialTheme.typography.headlineSmall)
                 if (selected == 0) {
@@ -107,8 +109,21 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
                         }
                     }
                 }
+                if (selected == 0) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf("Ao Vivo", "Filmes", "Séries", "Favoritos").forEachIndexed { index, label ->
+                            Column(Modifier.weight(1f).background(Color(0xFF191919), RoundedCornerShape(12.dp))
+                                .clickable { selected = if (index == 3) 1 else index + 1; favoritesOnly = index == 3; query = "" }
+                                .padding(vertical = 14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(listOf("▣", "▶", "▤", "★")[index], color = gold, fontSize = 25.sp)
+                                Spacer(Modifier.height(6.dp))
+                                Text(label, color = Color.White, fontSize = 11.sp)
+                            }
+                        }
+                    }
+                }
                 val sections = when (selected) {
-                    0 -> listOf("Continuar assistindo", "Ao vivo", "Filmes", "Séries")
+                    0 -> listOf("Continuar assistindo", "Lançamentos em Filmes", "Ao vivo", "Séries")
                     1 -> listOf("Categorias", "Favoritos", "Recentes")
                     2 -> listOf("Categorias de filmes", "Favoritos")
                     3 -> listOf("Categorias de séries", "Favoritos")
@@ -144,7 +159,7 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
                         Text(title, style = MaterialTheme.typography.titleMedium, color = Color.White, fontWeight = FontWeight.Bold)
                         val types = when(title) {
                             "Ao vivo" -> setOf("live", "channel", "tv")
-                            "Filmes" -> setOf("movie", "film", "vod")
+                            "Lançamentos em Filmes" -> setOf("movie", "film", "vod")
                             "Séries" -> setOf("series", "episode")
                             else -> emptySet()
                         }
