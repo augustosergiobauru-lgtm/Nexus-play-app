@@ -90,7 +90,11 @@ fun NexusPlayer(authorizedUrl: String, modifier: Modifier = Modifier, resumePosi
         error?.let { code ->
             Surface(Modifier.align(Alignment.Center).padding(8.dp)) {
                 Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Falha na reprodução: " + code)
+                    Text(when (code) {
+                        "ERROR_CODE_IO_BAD_HTTP_STATUS" -> "O servidor recusou a reprodução. Verifique a disponibilidade do vídeo."
+                        "ERROR_CODE_IO_NETWORK_CONNECTION_FAILED", "ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT" -> "Falha de conexão. Verifique sua internet."
+                        else -> "Falha na reprodução: $code"
+                    })
                     Button(onClick = {
                         retries = 0
                         error = null
