@@ -21,6 +21,11 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
     val handler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
     var items by remember(session) { mutableStateOf(emptyList<NexusCatalog.Item>()) }
     var query by remember { mutableStateOf("") }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val prefs = remember(session.userId) { context.getSharedPreferences("nexus_favorites_" + session.userId, android.content.Context.MODE_PRIVATE) }
+    var favorites by remember(session.userId) { mutableStateOf(prefs.getStringSet("ids", emptySet())?.toSet() ?: emptySet()) }
+    var favoritesOnly by remember { mutableStateOf(false) }
+
     var loading by remember { mutableStateOf(false) }
     var more by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -88,9 +93,18 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
                         2 -> setOf("movie", "film", "vod")
                         else -> setOf("series", "episode")
                     }
-                    val visible = items.filter { it.type.lowercase() in accepted && it.title.contains(query, ignoreCase = true) }
+                    Row { TextButton(onClick = { favoritesOnly = !favoritesOnly }) { Text(if (favoritesOnly) "Mostrar todos" else "Mostrar favoritos") } }
+                    val visible = items.filter { (!favoritesOnly || it.id in favorites) && it.type.lowercase() in accepted && it.title.contains(query, ignoreCase = true) }
                     visible.forEach { item ->
-                        Card(Modifier.fillMaxWidth()) { Text(item.title, Modifier.padding(16.dp)) }
+                        Card(Modifier.fillMaxWidth()) {
+                            Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                                Text(item.title, Modifier.weight(1f).padding(8.dp))
+                                TextButton(onClick = {
+                                    favorites = if (item.id in favorites) favorites - item.id else favorites + item.id
+                                    prefs.edit().putStringSet("ids", favorites.toSet()).apply()
+                                }) { Text(if (item.id in favorites) "★" else "☆") }
+                            }
+                        }
                     }
                     if (visible.isEmpty() && !loading) Text("Nenhum título encontrado nesta página.")
                     if (loading) CircularProgressIndicator()
