@@ -39,7 +39,7 @@ class DualPlaybackTest {
                 host.addView(session.surface(), FrameLayout.LayoutParams(-1, 280))
             }
             try {
-                await("Exo decoded and advanced") { session.playing && session.position > 1500 }
+                await("Exo decoded and advanced") { session.playing && session.videoRendered && session.position > 1500 }
                 main {
                     assertEquals(EngineFallback.Engine.EXO, session.engine)
                     session.togglePlay()
@@ -63,7 +63,7 @@ class DualPlaybackTest {
                     // Expand the SAME surface, then return to mini player.
                     host.getChildAt(0).layoutParams = FrameLayout.LayoutParams(-1, -1)
                 }
-                await("VLC decoded and advanced") { session.playing && session.position > 6500 }
+                await("VLC decoded and advanced") { session.playing && session.videoRendered && session.position > 6500 }
                 main {
                     host.getChildAt(0).layoutParams = FrameLayout.LayoutParams(-1, 280)
                     assertTrue(progress > 0)

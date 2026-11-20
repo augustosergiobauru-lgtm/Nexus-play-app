@@ -36,6 +36,8 @@ internal class NexusPlayback(
         private set
     var engine by mutableStateOf(EngineFallback.Engine.EXO)
         private set
+    var videoRendered by mutableStateOf(false)
+        private set
     var buffering by mutableStateOf(true)
         private set
     var error by mutableStateOf<String?>(null)
@@ -89,6 +91,7 @@ internal class NexusPlayback(
     }
 
     private fun startExo() {
+        videoRendered = false
         val token = ++generation
         buffering = true
         waitingSince = System.currentTimeMillis()
@@ -99,6 +102,9 @@ internal class NexusPlayback(
                     buffering = state == Player.STATE_BUFFERING
                     if (state == Player.STATE_READY) waitingSince = System.currentTimeMillis()
                     if (state == Player.STATE_ENDED) { desiredPlay = false; playing = false }
+                }
+                override fun onRenderedFirstFrame() {
+                    if (!released && token == generation) videoRendered = true
                 }
                 override fun onIsPlayingChanged(value: Boolean) {
                     if (released || token != generation) return
@@ -141,6 +147,7 @@ internal class NexusPlayback(
         buffering = true
         audioTracks = emptyList()
         subtitles = emptyList()
+        videoRendered = false
         engine = policy.engine
         waitingSince = System.currentTimeMillis()
         // Do not open media until AndroidView has attached its video surface.
@@ -156,6 +163,7 @@ internal class NexusPlayback(
                 lib = instance
                 val p = MediaPlayer(instance)
                 vlc = p
+                p.setVolume(if (muted) 0 else 100)
                 val token = generation
                 p.attachViews(layout, null, true, false)
                 p.setEventListener { event ->
@@ -170,6 +178,7 @@ internal class NexusPlayback(
                             playing = desiredPlay && foreground
                             waitingSince = System.currentTimeMillis()
                         }
+                        MediaPlayer.Event.Vout -> videoRendered = event.voutCount > 0
                         MediaPlayer.Event.Paused -> playing = false
                         MediaPlayer.Event.Buffering -> buffering = event.buffering < 100f
                         MediaPlayer.Event.EndReached -> { playing = false; desiredPlay = false; buffering = false }
