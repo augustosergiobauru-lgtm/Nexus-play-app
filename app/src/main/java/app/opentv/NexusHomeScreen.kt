@@ -14,6 +14,17 @@ import androidx.compose.ui.unit.sp
 /** Empty-state UI preview; no catalog entitlement or playback is implied. */
 @Composable
 fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
+    var demo by remember { mutableStateOf(false) }
+    if (demo) {
+        androidx.activity.compose.BackHandler { demo = false }
+        NexusPlaybackScreen(
+            session = session,
+            item = NexusCatalog.Item("public-demo-bbb", "Big Buck Bunny — demonstração", "movie", null),
+            authorizedUrl = "https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+            onClose = { demo = false }
+        )
+        return
+    }
     val gold = Color(0xFFE5C465)
     val tabs = listOf("Início", "Ao Vivo", "Filmes", "Séries", "Mais")
     var selected by remember { mutableStateOf(0) }
@@ -78,6 +89,9 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
                 Text("NEXUS PLAY", color = gold, fontSize = 28.sp)
                 Text("Prévia de desenvolvimento", color = Color.LightGray)
                 Text(tabs[selected], style = MaterialTheme.typography.headlineMedium)
+                if (selected == 0) Button(onClick = { demo = true }) {
+                    Text("Reproduzir vídeo de teste")
+                }
                 val sections = when (selected) {
                     0 -> listOf("Destaques", "Continuar assistindo", "Ao vivo", "Filmes", "Séries")
                     1 -> listOf("Categorias", "Favoritos", "Recentes")
