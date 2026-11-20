@@ -70,6 +70,7 @@ internal class NexusPlayback(
     private var waitingSince = System.currentTimeMillis()
     private var lastSample = -1L
     private var hasPlayed = false
+    private var lastProgressReportAt = 0L
     private val tick = object : Runnable {
         override fun run() {
             if (released) return
@@ -223,7 +224,11 @@ internal class NexusPlayback(
             audioTracks = v.audioTracks?.map { Track(it.id, it.name) }.orEmpty()
             subtitles = v.spuTracks?.filter { it.id >= 0 }?.map { Track(it.id, it.name) }.orEmpty()
         }
-        if (hasPlayed && !live) onProgress(position)
+        val now = System.currentTimeMillis()
+        if (hasPlayed && !live && position > 0 && now - lastProgressReportAt >= 5_000L) {
+            lastProgressReportAt = now
+            onProgress(position)
+        }
     }
 
     fun togglePlay() {
@@ -288,6 +293,7 @@ internal class NexusPlayback(
     fun release() {
         if (released) return
         sample()
+        if (hasPlayed && !live && position > 0) onProgress(position)
         released = true
         handler.removeCallbacksAndMessages(null)
         disposeEngines()
