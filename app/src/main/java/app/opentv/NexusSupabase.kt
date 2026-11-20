@@ -34,7 +34,7 @@ object NexusSupabase {
             .url("$SUPABASE_URL/rest/v1/rpc/nexus_device_checks_enabled")
             .header("apikey", SUPABASE_ANON_KEY)
             .header("Authorization", "Bearer ${session.accessToken}")
-            .post(okhttp3.FormBody.Builder().build()).build()
+            .get().build()
         client.newCall(request).enqueue(object : okhttp3.Callback {
             override fun onFailure(call: okhttp3.Call, e: IOException) {
                 callback(Result.failure(e))
