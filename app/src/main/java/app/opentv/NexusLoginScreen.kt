@@ -23,11 +23,12 @@ import androidx.compose.ui.unit.sp
 fun NexusLoginScreen(
     loading: Boolean,
     error: String?,
-    onLogin: (String, String) -> Unit
+    onLogin: (String, String, Boolean) -> Unit
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
+    var rememberLogin by remember { mutableStateOf(true) }
     val gold = Color(0xFFE5C465)
     MaterialTheme(colorScheme = darkColorScheme(primary = gold, onPrimary = Color.Black,
         background = Color(0xFF080808), surface = Color(0xFF171717))) {
@@ -56,8 +57,12 @@ fun NexusLoginScreen(
                     },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     modifier = Modifier.fillMaxWidth(), enabled = !loading)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = rememberLogin, onCheckedChange = { rememberLogin = it }, enabled = !loading)
+                    Text("Manter conectado", color = Color.White)
+                }
                 if (error != null) Text(error, color = MaterialTheme.colorScheme.error)
-                Button(onClick = { onLogin(email.trim(), password); password = ""; passwordVisible = false },
+                Button(onClick = { onLogin(email.trim(), password, rememberLogin); password = ""; passwordVisible = false },
                     enabled = !loading && email.isNotBlank() && password.isNotBlank(),
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                     if (loading) CircularProgressIndicator(Modifier.size(24.dp), color = Color.Black)
