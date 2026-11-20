@@ -61,7 +61,7 @@ fun NexusEntry() {
             onDispose { active.set(false) }
         }
         if (preview && approved) {
-            NexusHomeScreen(onExit = { session = null })
+            NexusHomeScreen(session = current, onExit = { session = null })
         } else Column(
             modifier = Modifier.fillMaxSize().padding(24.dp),
             verticalArrangement = Arrangement.Center,
