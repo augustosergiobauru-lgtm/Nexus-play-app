@@ -26,8 +26,8 @@ fun NexusHomeScreen(session: NexusAuth.Session, onExit: () -> Unit) {
         androidx.activity.compose.BackHandler { demo = false }
         NexusPlaybackScreen(
             session = session,
-            item = NexusCatalog.Item(if (hlsDemo) "public-demo-hls" else "public-demo-bbb", "Big Buck Bunny — demonstração", "movie", null),
-            authorizedUrl = if (hlsDemo) "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8" else "https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+            item = NexusCatalog.Item(if (hlsDemo) "public-demo-hls" else "public-demo-bbb", "Big Buck Bunny — © Blender Foundation", "movie", null),
+            authorizedUrl = if (hlsDemo) "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8" else "https://storage.googleapis.com/exoplayer-test-media-0/BigBuckBunny_320x180.mp4",
             onClose = { demo = false }
         )
         return

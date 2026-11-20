@@ -24,7 +24,7 @@ class DualPlaybackTest {
         }
         fail("Timed out: $label")
     }
-    @Test fun publicMp4BothEnginesAndControls() = exercise("https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4")
+    @Test fun publicMp4BothEnginesAndControls() = exercise("https://storage.googleapis.com/exoplayer-test-media-0/BigBuckBunny_320x180.mp4")
     @Test fun publicHlsBothEnginesAndControls() = exercise("https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8")
 
     private fun exercise(url: String) {

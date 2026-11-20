@@ -24,9 +24,13 @@ customer account. Sources are publisher-provided public testing material:
 https://github.com/muxinc/stream-examples
 https://test-streams.mux.dev/
 https://peach.blender.org/about/
-https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4
+https://storage.googleapis.com/exoplayer-test-media-0/BigBuckBunny_320x180.mp4
 
 An emulator pass validates these samples, not every provider codec or a physical
 Redmi/Android TV. Live DVR availability and available audio/subtitle tracks depend
 on the source and engine. LibVLC is pinned to 3.6.5 (Maven Central), retaining its
 license notices in the dependency; project remains GPLv3.
+
+The previous gtv-videos-bucket MP4 returned HTTP 403 in instrumentation. The
+diagnostic now uses Google ExoPlayer's public Big Buck Bunny sample instead.
+Big Buck Bunny © 2008 Blender Foundation, CC BY 3.0; credits remain in the film.
