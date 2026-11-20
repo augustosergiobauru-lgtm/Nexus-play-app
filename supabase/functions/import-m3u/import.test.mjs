@@ -22,6 +22,7 @@ globalThis.fetch=async(url,opts)=>{
  if(url.includes('/auth/v1/user'))return Response.json({id:'admin-id'});
  if(url.includes('/profiles?'))return Response.json([{role}]);
  if(url.includes('/playlists?')&&opts?.method!=='PATCH')return Response.json([{source_url:'https://public.test/list.m3u'}]);
+ if(url.includes('/m3u_xtream_sources?'))return Response.json([]);
  if(url.includes('/m3u_authorizations?'))return Response.json(authorized?[{source_url_hash:await sha256('https://public.test/list.m3u')}]:[]);
  if(url==='https://public.test/list.m3u')return new Response(sample);
  if(url.includes('/rpc/')){rpcCalls++;return Response.json({inserted:1,updated:0,replayed:false})}
