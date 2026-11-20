@@ -8,7 +8,7 @@ import androidx.compose.runtime.*
 @Composable
 fun NexusLoginRoute(
     auth: NexusAuth,
-    onAuthenticated: (NexusAuth.Session) -> Unit
+    onAuthenticated: (NexusAuth.Session, Boolean) -> Unit
 ) {
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -20,7 +20,7 @@ fun NexusLoginRoute(
         onDispose { active.set(false) }
     }
 
-    NexusLoginScreen(loading = loading, error = error, onLogin = { email, password ->
+    NexusLoginScreen(loading = loading, error = error, onLogin = { email, password, rememberLogin ->
         if (!loading) {
             loading = true
             error = null
@@ -30,7 +30,7 @@ fun NexusLoginRoute(
                         if (active.get()) {
                             loading = false
                             result.fold(
-                                onSuccess = { currentCallback(it) },
+                                onSuccess = { currentCallback(it, rememberLogin) },
                                 onFailure = { error = "Não foi possível entrar. Confira seus dados e a conexão." }
                             )
                         }
