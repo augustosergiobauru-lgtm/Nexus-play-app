@@ -46,3 +46,24 @@ No physical APK playback test was performed.
 ## Database rollout
 supabase/import-m3u-schema.sql is the consolidated initial schema for this feature. It was applied through three incremental managed migrations during this session. Do not reapply it to this project.
 Authorization and page audit tables have RLS. No service keys or provider credentials are committed.
+
+## Xtream compatibility update
+The screenshots show server/username/password credentials, rather than a ready M3U file. The existing V1 OpenTV dependency already includes an XtreamApi client; its protocol behavior was reviewed instead of copying any other app binary.
+
+The deployed importer now supports Xtream player_api.php:
+- Administrative configure_xtream action with xtream.server, xtream.username, xtream.password, optional allow_insecure_http and authorization_reference.
+- Credentials stored in m3u_xtream_sources, RLS enabled, no anon/authenticated grants; only service_role can access.
+- Source URL remains credential-free. Changing it invalidates the stored connection binding.
+- section=live → get_live_streams, movie → get_vod_streams, series → get_series plus get_series_info.
+- Series are sorted by ID and paginated one show at a time; each show's episodes are imported in batches of at most 200.
+- Use next_offset within a section/show. On completing a page chain, follow next_section and next_series_index at offset=0. done=true ends the full traversal.
+- The final section updates last_import_at; partial pages do not announce full completion.
+- HTTP requires an explicit allow_insecure_http flag. HTTPS on port 80 is preserved as entered; no automatic downgrade or certificate bypass.
+- TS is the default live format; M3U8 is selected when the provider advertises only M3U8.
+- Login/account errors are sanitized and provider URLs with credentials are not returned or logged.
+
+Validation: 13 M3U tests + 18 Xtream tests passed locally with synthetic credentials.
+No-credential root connectivity probes: first HTTPS server HTTP 200; second HTTP server timeout; second HTTPS:80 server HTTP 503. Root probes do not validate the accounts or catalogs.
+A credentialed provider test was blocked by automatic approval review because external destinations were not yet verified and explicit consent to send the pictured secrets was required. No provider catalog result is available; do not report a successful provider import.
+Provider secrets have not been committed or configured by this update.
+The Android click-to-play limitation documented above remains.
