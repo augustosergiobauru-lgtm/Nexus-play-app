@@ -177,8 +177,8 @@ object ManagerPage {
             </section>
 
             <p class="privacy">
-              This page is served by your television, over your own network — there is no OpenTV
-              account and no OpenTV server. Nothing you change here leaves your home.
+              This page is served by your television, over your own network — there is no Nexus Play
+              account and no Nexus Play server. Nothing you change here leaves your home.
             </p>
           </div>
 
