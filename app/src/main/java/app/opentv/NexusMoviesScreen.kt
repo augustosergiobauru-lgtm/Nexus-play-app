@@ -38,7 +38,7 @@ fun NexusMoviesScreen(
     val grid = rememberLazyGridState()
     LaunchedEffect(categoryId, query, sort, favoritesOnly) { grid.scrollToItem(0); selectedId = null }
     val nearEnd by remember { derivedStateOf { (grid.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1) >= grid.layoutInfo.totalItemsCount - 9 } }
-    LaunchedEffect(nearEnd, loading, more, items.size) { if (nearEnd && more && !loading && error == null) onMore() }
+    LaunchedEffect(nearEnd, loading, more, items.size) { if (contentLabel != "SÉRIES" && nearEnd && more && !loading && error == null) onMore() }
     val heading = if (favoritesOnly) "Favoritos" else categories.firstOrNull { it.id == categoryId }?.name ?: if (sort == "recent") "Adicionados recentemente" else "Tudo"
     MaterialTheme(colorScheme = darkColorScheme(primary = MovieGold, onPrimary = Color.Black, surface = Color(0xFF191919))) {
         BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xFF080808)).safeDrawingPadding()) {
@@ -52,7 +52,7 @@ fun NexusMoviesScreen(
                 }
                 Row(Modifier.weight(1f)) {
                     Column(Modifier.fillMaxHeight().width(if (landscape) 190.dp else 125.dp).background(Color(0xFF151515)).padding(10.dp)) {
-                        OutlinedTextField(value = query, onValueChange = onQuery, placeholder = { Text("Pesquisar…", fontSize = 12.sp) }, singleLine = true, modifier = Modifier.fillMaxWidth(), textStyle = LocalTextStyle.current.copy(fontSize = 13.sp))
+                        NexusSearchField(query, onQuery)
                         var menu by remember { mutableStateOf(false) }
                         Box {
                             OutlinedButton(onClick = { menu = true }, contentPadding = PaddingValues(7.dp), modifier = Modifier.fillMaxWidth()) {

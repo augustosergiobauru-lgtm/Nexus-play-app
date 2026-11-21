@@ -39,10 +39,11 @@ class NexusCatalog(
         })
     }
 
-    fun page(session: NexusAuth.Session, offset: Int = 0, contentType: String? = null, query: String = "", categoryId: String? = null, recentlyAdded: Boolean = false, pageSize: Int = 100, sortOrder: String = "az", callback: (Result<List<Item>>) -> Unit) {
-        try {
+    fun page(session: NexusAuth.Session, offset: Int = 0, contentType: String? = null, query: String = "", categoryId: String? = null, recentlyAdded: Boolean = false, pageSize: Int = 100, sortOrder: String = "az", seriesShows: Boolean = false, seriesTitle: String? = null, callback: (Result<List<Item>>) -> Unit): Call? {
+        return try {
             require(offset >= 0 && pageSize in 1..1000)
-            val base = (projectUrl.trimEnd('/') + "/rest/v1/channels").toHttpUrl()
+            val table = if (seriesShows) "series_catalog" else "channels"
+            val base = (projectUrl.trimEnd('/') + "/rest/v1/" + table).toHttpUrl()
             require(base.isHttps)
             require(contentType == null || contentType in setOf("live", "movie", "series"))
             val builder = base.newBuilder()
@@ -51,6 +52,7 @@ class NexusCatalog(
                 .addQueryParameter("order", if (recentlyAdded) "created_at.desc,id.desc" else when (sortOrder) { "default" -> "source_position.asc.nullslast,created_at.asc,id.asc"; "za" -> "title.desc,id.desc"; else -> "title.asc,id.asc" })
                 .addQueryParameter("limit", pageSize.toString())
                 .addQueryParameter("offset", offset.toString())
+            seriesTitle?.let { builder.addQueryParameter("series_title", "eq.$it") }
             categoryId?.let { builder.addQueryParameter("category_id", "eq.$it") }
             contentType?.let { builder.addQueryParameter("content_kind", "eq.$it") }
             if (contentType == "movie") builder.addQueryParameter("title", "not.ilike.*Big Buck Bunny*")
@@ -60,7 +62,8 @@ class NexusCatalog(
             val request = Request.Builder().url(url)
                 .header("apikey", publishableKey)
                 .header("Authorization", "Bearer ${session.accessToken}").get().build()
-            client.newCall(request).enqueue(object : Callback {
+            val call = client.newCall(request)
+            call.enqueue(object : Callback {
                 override fun onFailure(call: Call, e: IOException) {
                     callback(Result.failure(IOException("Falha ao consultar catálogo")))
                 }
@@ -84,8 +87,10 @@ class NexusCatalog(
                     callback(result)
                 }
             })
+            call
         } catch (e: Exception) {
             callback(Result.failure(e))
+            null
         }
     }
 }

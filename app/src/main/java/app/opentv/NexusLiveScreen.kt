@@ -82,8 +82,7 @@ internal fun NexusLiveScreen(
                 LazyColumn(Modifier.weight(0.27f).fillMaxHeight().background(LivePanel).padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     item {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    OutlinedTextField(value = query, onValueChange = onQuery, placeholder = { Text("Pesquisar...", fontSize = 13.sp) }, singleLine = true,
-                        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(6.dp))
+                    NexusSearchField(query, onQuery)
                     Box {
                         OutlinedButton(onClick = { sortMenu = true }, modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(8.dp)) {
                             Icon(Icons.Default.Sort, null, Modifier.size(16.dp))

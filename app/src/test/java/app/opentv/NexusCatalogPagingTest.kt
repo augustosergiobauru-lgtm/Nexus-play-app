@@ -52,10 +52,29 @@ class NexusCatalogPagingTest {
         assertEquals(101, NexusSeries.episodes(first + next, "Show").size)
     }
 
+    @Test fun seriesBrowseUsesCompactShowCatalog() {
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            val request = chain.request()
+            assertEquals("/rest/v1/series_catalog", request.url.encodedPath)
+            assertEquals("100", request.url.queryParameter("limit"))
+            assertEquals("eq.series", request.url.queryParameter("content_kind"))
+            Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("OK")
+                .body("""[{"id":"playlist:Show","title":"Show","content_type":"series"}]""".toResponseBody()).build()
+        }.build()
+        val latch = CountDownLatch(1)
+        var result: Result<List<NexusCatalog.Item>>? = null
+        NexusCatalog("https://catalog.test", "fixture", client).page(session, contentType = "series", seriesShows = true) {
+            result = it; latch.countDown()
+        }
+        assertTrue(latch.await(10, TimeUnit.SECONDS))
+        assertEquals("Show", result!!.getOrThrow().single().title)
+    }
+
     @Test fun episodeSearchIsScopedToSelectedShowAndKeepsPlayableIds() {
         val client = OkHttpClient.Builder().addInterceptor { chain ->
             val request = chain.request()
             assertEquals("eq.series", request.url.queryParameter("content_kind"))
+            assertEquals("eq.A Sete Palmos", request.url.queryParameter("series_title"))
             assertEquals("ilike.%A Sete Palmos%", request.url.queryParameter("title"))
             Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("OK")
                 .body("""[{"id":"original-episode-id","title":"A Sete Palmos S02E03","content_type":"series"}]""".toResponseBody()).build()
@@ -63,7 +82,7 @@ class NexusCatalogPagingTest {
         val catalog = NexusCatalog("https://catalog.test", "fixture", client)
         val latch = CountDownLatch(1)
         var result: Result<List<NexusCatalog.Item>>? = null
-        catalog.page(session, contentType = "series", query = "A Sete Palmos") { result = it; latch.countDown() }
+        catalog.page(session, contentType = "series", query = "A Sete Palmos", seriesTitle = "A Sete Palmos") { result = it; latch.countDown() }
         assertTrue(latch.await(10, TimeUnit.SECONDS))
         val episode = NexusSeries.episodes(result!!.getOrThrow(), "A Sete Palmos").single()
         assertEquals("original-episode-id", episode.item.id)

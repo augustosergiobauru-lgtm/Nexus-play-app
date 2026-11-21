@@ -48,7 +48,7 @@ fun NexusHomeScreen(
         val alive = java.util.concurrent.atomic.AtomicBoolean(true)
         var pending = 2
         listOf("movie", "series").forEach { type ->
-            catalog.page(session, contentType = type, recentlyAdded = true, pageSize = 48) { result ->
+            catalog.page(session, contentType = type, recentlyAdded = true, pageSize = 48, seriesShows = type == "series") { result ->
                 handler.post {
                     if (alive.get()) {
                         result.onSuccess { page -> homeItems = homeItems.filterNot { it.type == type } + page }
@@ -184,13 +184,15 @@ fun NexusHomeScreen(
             playbackError = "Não foi possível identificar ou autorizar este aparelho."
         }
     }
+    var catalogCall by remember { mutableStateOf<okhttp3.Call?>(null) }
+    DisposableEffect(Unit) { onDispose { catalogCall?.cancel() } }
     fun loadPage() {
         if (loading || !more) return
         loading = true
         error = null
         val generation = catalogGeneration
         val contentType = when (selected) { 1 -> "live"; 2 -> "movie"; 3 -> "series"; else -> null }
-        catalog.page(session, items.size, contentType = contentType, query = query, categoryId = if (selected == 1) liveCategoryId else if (selected in 2..3) movieCategory else null, recentlyAdded = selected in 2..3 && movieSort == "recent", sortOrder = if (selected == 1) liveSort else if (selected in 2..3) movieSort else "az") { result ->
+        catalogCall = catalog.page(session, items.size, contentType = contentType, query = query, seriesShows = selected == 3, categoryId = if (selected == 1) liveCategoryId else if (selected in 2..3) movieCategory else null, recentlyAdded = selected in 2..3 && movieSort == "recent", sortOrder = if (selected == 1) liveSort else if (selected in 2..3) movieSort else "az") { result ->
             handler.post {
                 if (active.get()) {
                     if (generation != catalogGeneration) return@post
@@ -205,6 +207,7 @@ fun NexusHomeScreen(
     }
     LaunchedEffect(session, selected, query, liveCategoryId, liveSort, movieCategory, movieSort) {
         catalogGeneration++
+        catalogCall?.cancel()
         items = emptyList()
         more = true
         loading = false
@@ -218,6 +221,7 @@ fun NexusHomeScreen(
     var episodesRetry by remember { mutableStateOf(0) }
     DisposableEffect(session, seriesDetail?.id, episodesRetry) {
         val alive = java.util.concurrent.atomic.AtomicBoolean(true)
+        var episodeCall: okhttp3.Call? = null
         episodeItems = emptyList()
         episodesError = null
         val show = seriesDetail
@@ -226,7 +230,7 @@ fun NexusHomeScreen(
             fun next(offset: Int) {
                 if (!alive.get()) return
                 // Fetch only this show's metadata; grouping never waits for the whole library.
-                catalog.page(session, offset, contentType = "series", query = show.title, sortOrder = "az") { result ->
+                episodeCall = catalog.page(session, offset, contentType = "series", query = show.title, sortOrder = "az", seriesTitle = show.title) { result ->
                     handler.post {
                         if (alive.get()) result.fold(onSuccess = { page ->
                             episodeItems = (episodeItems + page.filter { NexusSeries.key(it.title) == NexusSeries.key(show.title) }).distinctBy { it.id }
@@ -240,7 +244,7 @@ fun NexusHomeScreen(
             }
             next(0)
         }
-        onDispose { alive.set(false) }
+        onDispose { alive.set(false); episodeCall?.cancel() }
     }
     androidx.activity.compose.BackHandler(enabled = seriesDetail != null) { seriesDetail = null }
     val currentPlayback = playingItem
@@ -311,11 +315,11 @@ fun NexusHomeScreen(
             contentLabel = if (selected == 3) "SÉRIES" else "FILMES",
             categories = movieCategories.filter { adultUnlocked || !NexusContentPolicy.isAdult(it.name) },
             categoryId = movieCategory, onCategory = { movieCategory = it; movieFavorites = false },
-            items = if (selected == 3) NexusSeries.shows(items.filter { allowed(it) }, movieCategory).filter { show ->
-                show.title.contains(query, ignoreCase = true) &&
-                    (!movieFavorites || show.id in favorites)
-            }.let { shows -> when (movieSort) { "az" -> shows.sortedBy { it.title.lowercase() }; "za" -> shows.sortedByDescending { it.title.lowercase() }; "recent" -> shows.sortedByDescending { it.createdAt }; else -> shows } }
-            else items.filter { allowed(it) && (!movieFavorites || it.id in favorites) },
+            items = remember(items, adultUnlocked, favorites, movieFavorites, selected) {
+                val visible = items.filter { allowed(it) }
+                if (selected == 3) NexusSeries.shows(visible).filter { !movieFavorites || it.id in favorites }
+                else visible.filter { !movieFavorites || it.id in favorites }
+            },
             query = query, onQuery = { query = it }, sort = movieSort, onSort = { movieSort = it },
             favoritesOnly = movieFavorites, onFavorites = { movieFavorites = !movieFavorites },
             favorites = favorites, onFavorite = { item ->
@@ -391,7 +395,14 @@ fun NexusHomeScreen(
                 playbackError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 if (selected != 0) Text(tabs[selected], style = MaterialTheme.typography.headlineSmall)
                 if (selected == 0) {
-                    NexusHomeDashboard(
+                    NexusSearchField(query, { query = it }, hint = "Pesquisar filmes, séries e canais…")
+                    if (query.isNotBlank()) {
+                        NexusGlobalSearch(session, catalog, query, adultUnlocked,
+                            onOpen = { entry ->
+                                if (entry.type == "series") { selected = 3; seriesDetail = entry }
+                                else play(entry)
+                            }, modifier = if (compactHome) Modifier.weight(1f) else Modifier.heightIn(max = 500.dp))
+                    } else NexusHomeDashboard(
                         items = homeItems.filter { it.type != "series" && allowed(it) } + NexusSeries.shows(homeItems.filter { it.type == "series" && allowed(it) }), loading = homeLoading, failed = homeFailed,
                         busy = playbackBusy, onRetry = { homeRetry++ },
                         onOpen = { entry ->
@@ -409,8 +420,7 @@ fun NexusHomeScreen(
                     else -> listOf("Minha conta", "Dispositivos")
                 }
                 if (selected in 1..3) {
-                    OutlinedTextField(value = query, onValueChange = { query = it },
-                        label = { Text("Pesquisar") }, singleLine = true, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth())
+                    NexusSearchField(query, { query = it })
                     if (selected == 1) {
                         Box {
                             OutlinedButton(onClick = { categoryMenu = true }, modifier = Modifier.fillMaxWidth()) {
@@ -524,7 +534,7 @@ private fun NexusLiveImmersive(fullscreen: Boolean) {
 
 
 @Composable
-private fun NexusCatalogArtwork(item: NexusCatalog.Item, modifier: Modifier, contain: Boolean) {
+internal fun NexusCatalogArtwork(item: NexusCatalog.Item, modifier: Modifier, contain: Boolean) {
     Box(modifier.clip(RoundedCornerShape(10.dp)).background(Color(0xFF202020)), contentAlignment = Alignment.Center) {
         Icon(if (contain) Icons.Filled.LiveTv else Icons.Filled.Movie, contentDescription = null,
             tint = Color(0xFFE5C465), modifier = Modifier.size(28.dp))
