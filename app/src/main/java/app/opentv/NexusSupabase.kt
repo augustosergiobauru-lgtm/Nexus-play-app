@@ -1,6 +1,8 @@
 
 package app.opentv
 
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -60,11 +62,28 @@ object NexusSupabase {
             policy.fold(
                 onSuccess = { enabled ->
                     if (!enabled) callback(Result.success(true))
-                    else checkRegisteredDevice(session, deviceId, callback)
+                    else registerOwnDevice(session, deviceId, callback)
                 },
                 onFailure = { callback(Result.failure(it)) }
             )
         }
+    }
+
+    private fun registerOwnDevice(session: NexusAuth.Session, deviceId: String, callback: (Result<Boolean>) -> Unit) {
+        val payload = org.json.JSONObject().put("p_device_identifier", deviceId)
+            .put("p_device_name", "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
+        val call = client.newCall(Request.Builder().url("$SUPABASE_URL/rest/v1/rpc/register_nexus_device")
+            .header("apikey", SUPABASE_ANON_KEY).header("Authorization", "Bearer ${session.accessToken}")
+            .post(payload.toString().toRequestBody("application/json".toMediaType())).build())
+        call.enqueue(object : okhttp3.Callback {
+            override fun onFailure(call: okhttp3.Call, e: IOException) { callback(Result.failure(e)) }
+            override fun onResponse(call: okhttp3.Call, response: Response) {
+                callback(response.use { runCatching {
+                    check(it.isSuccessful) { "Não foi possível vincular o aparelho." }
+                    when (it.body?.string()?.trim()) { "true" -> true; "false" -> false; else -> error("Resposta inválida") }
+                } })
+            }
+        })
     }
 
     private fun checkRegisteredDevice(session: NexusAuth.Session, deviceId: String, callback: (Result<Boolean>) -> Unit) {
@@ -100,6 +119,16 @@ object NexusSupabase {
         }
     }
 
+    internal val diagnosticClient = OkHttpClient.Builder().callTimeout(20, java.util.concurrent.TimeUnit.SECONDS).build()
+    internal fun settingsRequest(session: NexusAuth.Session, path: String): Response = diagnosticClient.newCall(
+        Request.Builder().url("$SUPABASE_URL/rest/v1/$path")
+            .header("apikey", SUPABASE_ANON_KEY).header("Authorization", "Bearer ${session.accessToken}").build()
+    ).execute()
+    internal fun settingsRpc(session: NexusAuth.Session, name: String, payload: org.json.JSONObject): Response = diagnosticClient.newCall(
+        Request.Builder().url("$SUPABASE_URL/rest/v1/rpc/$name")
+            .header("apikey", SUPABASE_ANON_KEY).header("Authorization", "Bearer ${session.accessToken}")
+            .post(payload.toString().toRequestBody("application/json".toMediaType())).build()
+    ).execute()
     private val client = OkHttpClient()
 
     fun get(

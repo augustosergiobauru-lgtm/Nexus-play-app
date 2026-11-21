@@ -99,7 +99,7 @@ fun NexusEntry() {
                                                     approved = approval.getOrDefault(false)
                                                     if (approved) preview = true
                                                     message = approval.fold(
-                                                        onSuccess = { if (it) "Assinatura e aparelho aprovados. Player em desenvolvimento." else "Aparelho aguardando aprovação administrativa." },
+                                                        onSuccess = { if (it) "Assinatura e aparelho aprovados. Player em desenvolvimento." else "Limite de 1 aparelho por conta. Solicite ao atendimento a troca do dispositivo." },
                                                         onFailure = { "Falha ao verificar o aparelho." }
                                                     )
                                                 }

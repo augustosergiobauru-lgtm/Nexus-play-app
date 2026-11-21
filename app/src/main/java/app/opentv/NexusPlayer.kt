@@ -28,7 +28,7 @@ fun NexusPlayer(authorizedUrl: String, modifier: Modifier = Modifier, resumePosi
     if (uri.scheme !in setOf("http", "https") || uri.host.isNullOrBlank()) return
     val progressCallback by rememberUpdatedState(onProgress)
     val session = remember(context, authorizedUrl, isLive) {
-        NexusPlayback(context, authorizedUrl, resumePositionMs, isLive) { progressCallback(it) }
+        NexusPlayback(context, authorizedUrl, if (context.getSharedPreferences("nexus_playback_options", android.content.Context.MODE_PRIVATE).getBoolean("resume", true)) resumePositionMs else 0L, isLive) { progressCallback(it) }
     }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     DisposableEffect(session, lifecycle) {

@@ -14,10 +14,12 @@ class NexusCatalog(
     data class Item(val id: String, val title: String, val type: String, val categoryId: String?, val logoUrl: String? = null, val synopsis: String? = null, val adult: Boolean = false)
 
     data class Category(val id: String, val name: String)
-    fun liveCategories(session: NexusAuth.Session, callback: (Result<List<Category>>) -> Unit) {
+    fun liveCategories(session: NexusAuth.Session, callback: (Result<List<Category>>) -> Unit) = categories(session, "live", callback)
+
+    fun categories(session: NexusAuth.Session, type: String, callback: (Result<List<Category>>) -> Unit) {
         val url = (projectUrl.trimEnd('/') + "/rest/v1/categories").toHttpUrl().newBuilder()
             .addQueryParameter("select", "id,name")
-            .addQueryParameter("content_type", "eq.live")
+            .addQueryParameter("content_type", "eq.$type")
             .addQueryParameter("order", "name.asc")
             .addQueryParameter("limit", "1000").build()
         val request = Request.Builder().url(url).header("apikey", publishableKey)
