@@ -29,11 +29,13 @@ class SeriesSettingsTest {
             }
             activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
         }
+        rule.waitUntil(10000) { rule.activity.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE }
+        rule.waitForIdle()
         rule.onNodeWithText("SÉRIES").assertIsDisplayed()
         rule.onNodeWithText("FAVORITOS").assertIsDisplayed()
         rule.onNodeWithText("Ordem: Padrão").assertIsDisplayed()
         rule.onAllNodesWithContentDescription(episode.title).onFirst().performClick()
-        rule.onNodeWithText("Assistir").performClick()
+        rule.onNodeWithText("Assistir").performScrollTo().assertIsDisplayed().performClick()
         rule.runOnIdle { assertEquals(episode.id, played) }
     }
 
