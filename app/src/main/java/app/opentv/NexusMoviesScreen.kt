@@ -77,7 +77,7 @@ fun NexusMoviesScreen(
                         if (items.isEmpty() && !loading && error == null) Text("Nenhum conteúdo encontrado.", color = Color.LightGray, modifier = Modifier.padding(16.dp))
                         LazyVerticalGrid(columns = if (landscape) GridCells.Fixed(4) else GridCells.Adaptive(100.dp), state = grid, contentPadding = PaddingValues(16.dp), horizontalArrangement = Arrangement.spacedBy(18.dp), verticalArrangement = Arrangement.spacedBy(18.dp), modifier = Modifier.weight(1f)) {
                             items(items, key = { it.id }) { movie ->
-                                Column(Modifier.clickable { if (selectedId == movie.id) onPlay(movie) else selectedId = movie.id }) {
+                                Column(Modifier.clickable { if (contentLabel == "SÉRIES" || selectedId == movie.id) onPlay(movie) else selectedId = movie.id }) {
                                     MoviePoster(movie, Modifier.fillMaxWidth().aspectRatio(0.61f), selected?.id == movie.id)
                                     Text(movie.title, color = Color.White, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
                                     if (!landscape && selectedId == movie.id) {
