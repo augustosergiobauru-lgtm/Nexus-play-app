@@ -33,13 +33,17 @@ class NexusAccessFlow(
 }
 
 object NexusInstallation {
+    /** Scoped Android ID survives reinstall on the same signing key and cannot travel in backups. */
     @Synchronized
     fun identifier(context: Context): String {
-        val prefs = context.applicationContext.getSharedPreferences("nexus_installation", Context.MODE_PRIVATE)
-        val existing = prefs.getString("identifier", null)
-        if (existing != null && runCatching { UUID.fromString(existing) }.isSuccess) return existing
-        val id = UUID.randomUUID().toString()
-        check(prefs.edit().putString("identifier", id).commit()) { "Unable to save installation identifier" }
-        return id
+        val androidId = android.provider.Settings.Secure.getString(
+            context.applicationContext.contentResolver, android.provider.Settings.Secure.ANDROID_ID
+        )?.trim().orEmpty()
+        check(androidId.isNotBlank() && androidId != "9774d56d682e549c") {
+            "Não foi possível identificar este aparelho."
+        }
+        return UUID.nameUUIDFromBytes(
+            ("nexus-device-v2:" + context.packageName + ":" + androidId).toByteArray(Charsets.UTF_8)
+        ).toString()
     }
 }
