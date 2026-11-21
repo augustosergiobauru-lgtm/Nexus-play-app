@@ -74,6 +74,13 @@ fun NexusHomeScreen(
         onDispose { alive.set(false) }
     }
     var liveCategories by remember { mutableStateOf(emptyList<NexusCatalog.Category>()) }
+    var movieCategories by remember { mutableStateOf(emptyList<NexusCatalog.Category>()) }
+    var movieCategory by remember { mutableStateOf<String?>(null) }
+    var movieSort by remember { mutableStateOf("recent") }
+    var movieFavorites by remember { mutableStateOf(false) }
+    LaunchedEffect(session) {
+        catalog.categories(session, "movie") { result -> handler.post { result.onSuccess { movieCategories = it } } }
+    }
     var liveSort by remember { mutableStateOf("default") }
     var liveCategoryId by remember { mutableStateOf<String?>(null) }
     var categoryMenu by remember { mutableStateOf(false) }
@@ -189,7 +196,7 @@ fun NexusHomeScreen(
         error = null
         val generation = catalogGeneration
         val contentType = when (selected) { 1 -> "live"; 2 -> "movie"; 3 -> "series"; else -> null }
-        catalog.page(session, items.size, contentType = contentType, query = query, categoryId = if (selected == 1) liveCategoryId else null, sortOrder = if (selected == 1) liveSort else "az") { result ->
+        catalog.page(session, items.size, contentType = contentType, query = query, categoryId = if (selected == 1) liveCategoryId else if (selected == 2) movieCategory else null, recentlyAdded = selected == 2 && movieSort == "recent", sortOrder = if (selected == 1) liveSort else if (selected == 2) movieSort else "az") { result ->
             handler.post {
                 if (active.get()) {
                     if (generation != catalogGeneration) return@post
@@ -202,7 +209,7 @@ fun NexusHomeScreen(
             }
         }
     }
-    LaunchedEffect(session, selected, query, liveCategoryId, liveSort) {
+    LaunchedEffect(session, selected, query, liveCategoryId, liveSort, movieCategory, movieSort) {
         catalogGeneration++
         items = emptyList()
         more = true
@@ -262,6 +269,23 @@ fun NexusHomeScreen(
             onBack = { selected = 0; query = "" }, expanded = showLive && liveExpanded,
             sortOrder = liveSort, onSort = { liveSort = it }, onParental = { parentalDialog = true },
             onExpand = { liveExpanded = !liveExpanded }, video = { liveVideo() }
+        )
+        return
+    }
+    if (selected == 2) {
+        androidx.activity.compose.BackHandler { selected = 0; query = "" }
+        NexusMoviesScreen(
+            categories = movieCategories.filter { adultUnlocked || !NexusContentPolicy.isAdult(it.name) },
+            categoryId = movieCategory, onCategory = { movieCategory = it; movieFavorites = false },
+            items = items.filter { allowed(it) && (!movieFavorites || it.id in favorites) },
+            query = query, onQuery = { query = it }, sort = movieSort, onSort = { movieSort = it },
+            favoritesOnly = movieFavorites, onFavorites = { movieFavorites = !movieFavorites },
+            favorites = favorites, onFavorite = { item ->
+                favorites = if (item.id in favorites) favorites - item.id else favorites + item.id
+                prefs.edit().putStringSet("ids", favorites.toSet()).apply()
+            }, loading = loading, more = more, error = playbackError ?: error,
+            busy = playbackBusy, onMore = { loadPage() }, onPlay = { play(it) },
+            onBack = { selected = 0; query = "" }
         )
         return
     }
