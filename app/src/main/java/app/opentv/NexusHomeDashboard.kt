@@ -145,7 +145,7 @@ internal fun NexusHomeDashboard(
             LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth().testTag("home-rail-$tab")) {
                 items(entries.take(24), key = { it.id }) { entry ->
                     Column(Modifier.width(if (landscape) 128.dp else 118.dp).clickable(enabled = !busy) { onOpen(entry) }) {
-                        AsyncImage(model = entry.logoUrl, contentDescription = homeTitle(entry), contentScale = ContentScale.Crop,
+                        AsyncImage(model = entry.logoUrl, contentDescription = homeTitle(entry), contentScale = ContentScale.Fit,
                             modifier = Modifier.fillMaxWidth().height(if (landscape) (railHeight - 54.dp).coerceAtLeast(1.dp) else 166.dp)
                                 .clip(RoundedCornerShape(9.dp)).background(Color(0xFF202020)))
                         Text(homeTitle(entry), color = Color(0xFFDEDEDE), fontSize = 11.sp, lineHeight = 15.sp,
