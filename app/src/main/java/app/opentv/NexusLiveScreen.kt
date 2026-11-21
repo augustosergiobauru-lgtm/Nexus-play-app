@@ -143,7 +143,7 @@ internal fun NexusLiveScreen(
                     Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(10.dp)).background(Color.Black), contentAlignment = Alignment.Center) {
                         video()
                         if (title == null) Text("Selecione um canal", color = Color.Gray, fontSize = 12.sp)
-                        if (title != null) IconButton(onClick = onExpand, modifier = Modifier.align(Alignment.BottomEnd)) { Icon(Icons.Default.Fullscreen, "Tela cheia", tint = Color.White) }
+                        if (title != null) IconButton(onClick = onExpand, modifier = Modifier.align(Alignment.BottomEnd).size(32.dp)) { Icon(Icons.Default.Fullscreen, "Tela cheia", tint = Color.White, modifier = Modifier.size(18.dp)) }
                         if (busy) CircularProgressIndicator(Modifier.size(24.dp), color = LiveGold)
                     }
                     title?.let { Text(it, color = LiveGold, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
