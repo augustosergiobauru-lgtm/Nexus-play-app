@@ -34,7 +34,7 @@ class HomeVisualTest {
         val client = OkHttpClient.Builder().addInterceptor { chain ->
             val request = chain.request()
             val response = if (request.url.encodedPath.endsWith("/categories")) "[]" else {
-                assertEquals("id,title,content_type,category_id,logo_url", request.url.queryParameter("select"))
+                assertEquals("id,title,content_type,category_id,logo_url,categories(name)", request.url.queryParameter("select"))
                 assertEquals("created_at.desc,id.desc", request.url.queryParameter("order"))
                 assertEquals("48", request.url.queryParameter("limit"))
                 val kind = request.url.queryParameter("content_kind")
