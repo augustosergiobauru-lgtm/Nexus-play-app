@@ -33,7 +33,7 @@ export function xtreamRows(entries,categories,section,server,credentials){
   const path=[section,credentials.username,credentials.password,id+'.'+extension].map(encodeURIComponent).join('/');
   const stream_url=new URL(path,server).href;
   if(seen.has(stream_url)){duplicates++;continue;}seen.add(stream_url);
-  rows.push({title,stream_url,content_type:section,group:groups.get(text(row.category_id))||text(row._group)||'Sem categoria',external_id:text(row.epg_channel_id)||section+':'+id,logo_url:image(row.stream_icon||row.cover||row.info?.movie_image)});
+  rows.push({source_position:Number.isSafeInteger(Number(row.num))&&Number(row.num)>0?Number(row.num):null,title,stream_url,content_type:section,group:groups.get(text(row.category_id))||text(row._group)||'Sem categoria',external_id:text(row.epg_channel_id)||section+':'+id,logo_url:image(row.stream_icon||row.cover||row.info?.movie_image)});
  }
  return {rows,invalid,duplicates};
 }

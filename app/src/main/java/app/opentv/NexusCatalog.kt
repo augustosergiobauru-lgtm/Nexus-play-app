@@ -11,7 +11,7 @@ class NexusCatalog(
     private val publishableKey: String,
     private val client: OkHttpClient = OkHttpClient.Builder().followRedirects(false).followSslRedirects(false).build()
 ) {
-    data class Item(val id: String, val title: String, val type: String, val categoryId: String?, val logoUrl: String? = null, val synopsis: String? = null)
+    data class Item(val id: String, val title: String, val type: String, val categoryId: String?, val logoUrl: String? = null, val synopsis: String? = null, val adult: Boolean = false)
 
     data class Category(val id: String, val name: String)
     fun liveCategories(session: NexusAuth.Session, callback: (Result<List<Category>>) -> Unit) {
@@ -37,16 +37,16 @@ class NexusCatalog(
         })
     }
 
-    fun page(session: NexusAuth.Session, offset: Int = 0, contentType: String? = null, query: String = "", categoryId: String? = null, recentlyAdded: Boolean = false, pageSize: Int = 100, callback: (Result<List<Item>>) -> Unit) {
+    fun page(session: NexusAuth.Session, offset: Int = 0, contentType: String? = null, query: String = "", categoryId: String? = null, recentlyAdded: Boolean = false, pageSize: Int = 100, sortOrder: String = "az", callback: (Result<List<Item>>) -> Unit) {
         try {
             require(offset >= 0 && pageSize in 1..100)
             val base = (projectUrl.trimEnd('/') + "/rest/v1/channels").toHttpUrl()
             require(base.isHttps)
             require(contentType == null || contentType in setOf("live", "movie", "series"))
             val builder = base.newBuilder()
-                .addQueryParameter("select", "id,title,content_type,category_id,logo_url")
+                .addQueryParameter("select", "id,title,content_type,category_id,logo_url,categories(name)")
                 .addQueryParameter("is_active", "eq.true")
-                .addQueryParameter("order", if (recentlyAdded) "created_at.desc,id.desc" else "title.asc,id.asc")
+                .addQueryParameter("order", if (recentlyAdded) "created_at.desc,id.desc" else when (sortOrder) { "default" -> "source_position.asc.nullslast,created_at.asc,id.asc"; "za" -> "title.desc,id.desc"; else -> "title.asc,id.asc" })
                 .addQueryParameter("limit", pageSize.toString())
                 .addQueryParameter("offset", offset.toString())
             categoryId?.let { builder.addQueryParameter("category_id", "eq.$it") }
@@ -78,7 +78,7 @@ class NexusCatalog(
                                     row.optString("logo_url").takeIf { it.isNotBlank() && it != "null" },
                                     listOf("synopsis", "overview", "description", "plot").firstNotNullOfOrNull { key ->
                                         row.optString(key).takeIf { it.isNotBlank() && it != "null" }
-                                    })
+                                    }, NexusContentPolicy.isAdult(row.getString("title"), row.optJSONObject("categories")?.optString("name").orEmpty()))
                             }
                         }
                     }

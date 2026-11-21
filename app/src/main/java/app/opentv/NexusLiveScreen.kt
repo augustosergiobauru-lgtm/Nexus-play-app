@@ -37,6 +37,7 @@ internal fun NexusLiveScreen(
     userId: String, selectedId: String?, title: String?, busy: Boolean,
     error: String?, loading: Boolean, more: Boolean, onMore: () -> Unit,
     onPlay: (NexusCatalog.Item) -> Unit, onBack: () -> Unit,
+    sortOrder: String, onSort: (String) -> Unit, onParental: () -> Unit,
     expanded: Boolean, onExpand: () -> Unit, video: @Composable () -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -44,7 +45,7 @@ internal fun NexusLiveScreen(
     var recentIds by remember(userId) { mutableStateOf(emptyList<String>()) }
     var filter by remember { mutableStateOf("all") }
     var grid by remember { mutableStateOf(true) }
-    var ascending by remember { mutableStateOf(true) }
+    var sortMenu by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf(false) }
     var clock by remember { mutableStateOf("") }
     LaunchedEffect(userId, selectedId) {
@@ -81,9 +82,20 @@ internal fun NexusLiveScreen(
                 Column(Modifier.weight(0.27f).fillMaxHeight().background(LivePanel).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     OutlinedTextField(value = query, onValueChange = onQuery, placeholder = { Text("Pesquisar...", fontSize = 13.sp) }, singleLine = true,
                         modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(6.dp))
-                    OutlinedButton(onClick = { ascending = !ascending }, modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(8.dp)) {
-                        Icon(Icons.Default.Sort, null, Modifier.size(16.dp))
-                        Text(if (ascending) "Ordem: A–Z" else "Ordem: Z–A", fontSize = 12.sp)
+                    Box {
+                        OutlinedButton(onClick = { sortMenu = true }, modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(8.dp)) {
+                            Icon(Icons.Default.Sort, null, Modifier.size(16.dp))
+                            Text("Ordem: " + when (sortOrder) { "az" -> "A–Z"; "za" -> "Z–A"; else -> "Padrão da lista" }, fontSize = 12.sp)
+                        }
+                        DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
+                            listOf("default" to "Padrão da lista", "az" to "A–Z", "za" to "Z–A").forEach { (value, label) ->
+                                DropdownMenuItem(text = { Text(label) }, onClick = { onSort(value); sortMenu = false })
+                            }
+                        }
+                    }
+                    TextButton(onClick = onParental) {
+                        Icon(Icons.Default.Lock, null, Modifier.size(16.dp))
+                        Text("Controle parental", fontSize = 11.sp)
                     }
                     LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         item { LiveCategory("FAVORITOS", filter == "favorites") { filter = "favorites"; onCategory(null) } }
@@ -107,7 +119,7 @@ internal fun NexusLiveScreen(
                         }
                     }
                     val visible = channels.filter { when (filter) { "favorites" -> it.id in favorites; "recent" -> it.id in recentIds; else -> true } }
-                        .let { list -> if (filter == "recent") list.sortedBy { recentIds.indexOf(it.id) } else if (ascending) list else list.asReversed() }
+                        .let { list -> if (filter == "recent") list.sortedBy { recentIds.indexOf(it.id) } else list }
                     if (loading) LinearProgressIndicator(Modifier.fillMaxWidth(), color = LiveGold)
                     if (grid) {
                         LazyVerticalGrid(columns = GridCells.Fixed(4), modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {

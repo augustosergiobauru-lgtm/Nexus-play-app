@@ -74,6 +74,7 @@ fun NexusHomeScreen(
         onDispose { alive.set(false) }
     }
     var liveCategories by remember { mutableStateOf(emptyList<NexusCatalog.Category>()) }
+    var liveSort by remember { mutableStateOf("default") }
     var liveCategoryId by remember { mutableStateOf<String?>(null) }
     var categoryMenu by remember { mutableStateOf(false) }
     var categoryError by remember { mutableStateOf<String?>(null) }
@@ -89,6 +90,9 @@ fun NexusHomeScreen(
     }
     var query by remember { mutableStateOf("") }
     val context = androidx.compose.ui.platform.LocalContext.current
+    val parental = remember(session.userId) { NexusParental(context, session.userId) }
+    var adultUnlocked by remember(session.userId) { mutableStateOf(false) }
+    var parentalDialog by remember { mutableStateOf(false) }
     val prefs = remember(session.userId) { context.getSharedPreferences("nexus_favorites_" + session.userId, android.content.Context.MODE_PRIVATE) }
     var favorites by remember(session.userId) { mutableStateOf(prefs.getStringSet("ids", emptySet())?.toSet() ?: emptySet()) }
     var favoritesOnly by remember { mutableStateOf(false) }
@@ -113,7 +117,32 @@ fun NexusHomeScreen(
     var liveExpanded by remember { mutableStateOf(false) }
     var requestedLiveId by remember { mutableStateOf<String?>(null) }
     var playbackGeneration by remember { mutableStateOf(0) }
+    fun allowed(item: NexusCatalog.Item): Boolean = adultUnlocked || !item.adult && !NexusContentPolicy.isAdult(item.title, liveCategories.firstOrNull { it.id == item.categoryId }?.name.orEmpty())
+    fun lockAdult() {
+        adultUnlocked = false
+        liveCategoryId = null
+        seriesDetail = null
+        // Cancel pending authorization as well as playback, so locking cannot race a response.
+        playbackGeneration++
+        playbackCall?.cancel()
+        playbackBusy = false
+        playingItem = null
+        playbackUrl = null
+        requestedLiveId = null
+        liveExpanded = false
+    }
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle, session.userId) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) { lockAdult(); parentalDialog = false }
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
+    if (parentalDialog) NexusParentalDialog(parental, adultUnlocked,
+        onUnlock = { adultUnlocked = true }, onLock = { lockAdult() }, onDismiss = { parentalDialog = false })
     fun play(item: NexusCatalog.Item) {
+        if (!allowed(item)) { parentalDialog = true; return }
         val live = item.type.lowercase() in setOf("live", "channel", "tv")
         if (live) {
             selected = 1
@@ -160,7 +189,7 @@ fun NexusHomeScreen(
         error = null
         val generation = catalogGeneration
         val contentType = when (selected) { 1 -> "live"; 2 -> "movie"; 3 -> "series"; else -> null }
-        catalog.page(session, items.size, contentType = contentType, query = query, categoryId = if (selected == 1) liveCategoryId else null) { result ->
+        catalog.page(session, items.size, contentType = contentType, query = query, categoryId = if (selected == 1) liveCategoryId else null, sortOrder = if (selected == 1) liveSort else "az") { result ->
             handler.post {
                 if (active.get()) {
                     if (generation != catalogGeneration) return@post
@@ -173,7 +202,7 @@ fun NexusHomeScreen(
             }
         }
     }
-    LaunchedEffect(session, selected, query, liveCategoryId) {
+    LaunchedEffect(session, selected, query, liveCategoryId, liveSort) {
         catalogGeneration++
         items = emptyList()
         more = true
@@ -220,9 +249,9 @@ fun NexusHomeScreen(
     NexusLiveImmersive(showLive && liveExpanded)
     if (selected == 1) {
         NexusLiveScreen(
-            categories = liveCategories, categoryId = liveCategoryId,
+            categories = liveCategories.filter { adultUnlocked || !NexusContentPolicy.isAdult(it.name) }, categoryId = liveCategoryId,
             onCategory = { liveCategoryId = it }, query = query, onQuery = { query = it },
-            channels = items, favorites = favorites,
+            channels = items.filter { allowed(it) }, favorites = favorites,
             onFavorite = { item ->
                 favorites = if (item.id in favorites) favorites - item.id else favorites + item.id
                 prefs.edit().putStringSet("ids", favorites.toSet()).apply()
@@ -231,6 +260,7 @@ fun NexusHomeScreen(
             error = playbackError ?: error ?: categoryError, loading = loading, more = more,
             onMore = { loadPage() }, onPlay = { play(it) },
             onBack = { selected = 0; query = "" }, expanded = showLive && liveExpanded,
+            sortOrder = liveSort, onSort = { liveSort = it }, onParental = { parentalDialog = true },
             onExpand = { liveExpanded = !liveExpanded }, video = { liveVideo() }
         )
         return
@@ -295,7 +325,7 @@ fun NexusHomeScreen(
                 if (selected != 0) Text(tabs[selected], style = MaterialTheme.typography.headlineSmall)
                 if (selected == 0) {
                     NexusHomeDashboard(
-                        items = homeItems, loading = homeLoading, failed = homeFailed,
+                        items = homeItems.filter { allowed(it) }, loading = homeLoading, failed = homeFailed,
                         busy = playbackBusy, onRetry = { homeRetry++ },
                         onOpen = { entry ->
                             if (entry.type == "series") { selected = 3; seriesDetail = entry } else play(entry)
@@ -340,7 +370,7 @@ fun NexusHomeScreen(
                         FilterChip(selected = !favoritesOnly, onClick = { favoritesOnly = false }, label = { Text("Todos") })
                         FilterChip(selected = favoritesOnly, onClick = { favoritesOnly = true }, label = { Text("Favoritos") })
                     }
-                    val visible = items.filter { (!favoritesOnly || it.id in favorites) && it.type.lowercase() in accepted && it.title.contains(query, ignoreCase = true) }
+                    val visible = items.filter { allowed(it) && (!favoritesOnly || it.id in favorites) && it.type.lowercase() in accepted && it.title.contains(query, ignoreCase = true) }
                     visible.forEach { item ->
                         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(containerColor = if (selected == 1 && requestedLiveId == item.id) Color(0xFF332A16) else Color(0xFF151515))) {
                             Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
@@ -362,6 +392,7 @@ fun NexusHomeScreen(
                  } else if (selected == 0) {
                     // Home sections are rendered together by NexusHomeDashboard.
                 } else {
+                    OutlinedButton(onClick = { parentalDialog = true }) { Text("Controle parental") }
                     Text("Minha conta", color = gold)
                     Text("Dispositivo autorizado", color = Color.LightGray)
                     HorizontalDivider()

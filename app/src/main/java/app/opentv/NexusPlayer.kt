@@ -1,6 +1,7 @@
 package app.opentv
 
 import android.net.Uri
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -43,6 +44,14 @@ fun NexusPlayer(authorizedUrl: String, modifier: Modifier = Modifier, resumePosi
         onDispose { lifecycle.removeObserver(observer); session.release() }
     }
     var panel by remember { mutableStateOf<String?>(null) }
+    var controls by remember(authorizedUrl) { mutableStateOf(true) }
+    var interaction by remember { mutableStateOf(0) }
+    LaunchedEffect(controls, interaction, panel) {
+        if (controls && panel == null) {
+            kotlinx.coroutines.delay(3000)
+            controls = false
+        }
+    }
     var scrub by remember { mutableStateOf<Float?>(null) }
     val gold = Color(0xFFE5C465)
     MaterialTheme(colorScheme = darkColorScheme(primary = gold, onPrimary = Color.Black, surface = Color(0xFF171717))) {
@@ -51,23 +60,24 @@ fun NexusPlayer(authorizedUrl: String, modifier: Modifier = Modifier, resumePosi
                 AndroidView(modifier = Modifier.fillMaxSize(), factory = { session.surface() })
             }
             if (session.buffering && session.error == null) CircularProgressIndicator(Modifier.align(Alignment.Center), color = gold)
-            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color.Black.copy(alpha = .70f))) {
+            Box(Modifier.fillMaxSize().clickable { controls = !controls; interaction++ })
+            if (controls) Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color.Black.copy(alpha = .25f))) {
                 if (session.seekable && session.duration > 0) {
                     Slider(value = scrub ?: session.position.toFloat().coerceIn(0f, session.duration.toFloat()),
                         onValueChange = { scrub = it },
                         onValueChangeFinished = { scrub?.let { session.seek(it.toLong()) }; scrub = null },
                         valueRange = 0f..session.duration.toFloat(), modifier = Modifier.fillMaxWidth().height(22.dp).padding(horizontal = 12.dp))
                 }
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = session::togglePlay, enabled = session.error == null) {
+                Row(Modifier.fillMaxWidth().then(if (isLive) Modifier.padding(end = 36.dp) else Modifier), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(modifier = Modifier.size(32.dp), onClick = { session.togglePlay(); interaction++ }, enabled = session.error == null) {
                         Icon(if (session.playing) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            if (session.playing) "Pausar" else "Reproduzir", tint = gold)
+                            if (session.playing) "Pausar" else "Reproduzir", tint = gold, modifier = Modifier.size(18.dp))
                     }
-                    IconButton(onClick = { session.seek(session.position - 15_000L) }, enabled = session.seekable) { Icon(Icons.Default.FastRewind, "Voltar 15 segundos") }
-                    IconButton(onClick = { session.seek(session.position + 15_000L) }, enabled = session.seekable) { Icon(Icons.Default.FastForward, "Avançar 15 segundos") }
+                    if (!isLive) IconButton(modifier = Modifier.size(32.dp), onClick = { interaction++; session.seek(session.position - 15_000L) }, enabled = session.seekable) { Icon(Icons.Default.FastRewind, "Voltar 15 segundos", Modifier.size(18.dp)) }
+                    if (!isLive) IconButton(modifier = Modifier.size(32.dp), onClick = { interaction++; session.seek(session.position + 15_000L) }, enabled = session.seekable) { Icon(Icons.Default.FastForward, "Avançar 15 segundos", Modifier.size(18.dp)) }
                     Text(if (isLive) "AO VIVO" else timeLabel(session.position), Modifier.weight(1f), style = MaterialTheme.typography.labelSmall)
-                    IconButton(onClick = session::toggleMute) { Icon(if (session.muted) Icons.Default.VolumeOff else Icons.Default.VolumeUp, "Ativar ou silenciar áudio") }
-                    IconButton(onClick = { panel = "Opções" }) { Icon(Icons.Default.Settings, "Opções de reprodução") }
+                    IconButton(modifier = Modifier.size(32.dp), onClick = { session.toggleMute(); interaction++ }) { Icon(if (session.muted) Icons.Default.VolumeOff else Icons.Default.VolumeUp, "Ativar ou silenciar áudio", Modifier.size(18.dp)) }
+                    IconButton(modifier = Modifier.size(32.dp), onClick = { panel = "Opções"; interaction++ }) { Icon(Icons.Default.Settings, "Opções de reprodução", Modifier.size(18.dp)) }
                 }
             }
             session.error?.let { message ->
