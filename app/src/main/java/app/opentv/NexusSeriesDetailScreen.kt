@@ -69,7 +69,7 @@ fun NexusSeriesDetailScreen(
                                     modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(8.dp), colors = ButtonDefaults.outlinedButtonColors(containerColor = Color(0xFF171717).copy(alpha = .85f))) {
                                     Box(Modifier.width(112.dp).height(64.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF242018)), contentAlignment = Alignment.Center) {
                                         Icon(Icons.Default.PlayArrow, null, tint = gold)
-                                        AsyncImage(model = episode.item.logoUrl ?: show.logoUrl, contentDescription = null,
+                                        AsyncImage(model = show.logoUrl ?: episode.item.logoUrl, contentDescription = null,
                                             contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
                                     }
                                     Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {

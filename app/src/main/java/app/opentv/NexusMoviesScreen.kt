@@ -39,7 +39,7 @@ fun NexusMoviesScreen(
     LaunchedEffect(categoryId, query, sort, favoritesOnly) { grid.scrollToItem(0); selectedId = null }
     val nearEnd by remember { derivedStateOf { (grid.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1) >= grid.layoutInfo.totalItemsCount - 9 } }
     LaunchedEffect(nearEnd, loading, more, items.size) { if (contentLabel != "SÉRIES" && nearEnd && more && !loading && error == null) onMore() }
-    val heading = if (favoritesOnly) "Favoritos" else categories.firstOrNull { it.id == categoryId }?.name ?: if (sort == "recent") "Adicionados recentemente" else "Tudo"
+    val heading = if (favoritesOnly) "Favoritos" else categories.firstOrNull { it.id == categoryId }?.name ?: if (sort == "recent") "Adicionados recentemente" else if (sort == "popular") "Séries populares" else "Tudo"
     MaterialTheme(colorScheme = darkColorScheme(primary = MovieGold, onPrimary = Color.Black, surface = Color(0xFF191919))) {
         BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xFF080808)).safeDrawingPadding()) {
             val landscape = maxWidth > maxHeight
@@ -56,17 +56,18 @@ fun NexusMoviesScreen(
                         var menu by remember { mutableStateOf(false) }
                         Box {
                             OutlinedButton(onClick = { menu = true }, contentPadding = PaddingValues(7.dp), modifier = Modifier.fillMaxWidth()) {
-                                Text("Ordem: " + when(sort) { "az" -> "A–Z"; "za" -> "Z–A"; "default" -> "Padrão"; else -> "Recentes" }, fontSize = 11.sp)
+                                Text("Ordem: " + when(sort) { "az" -> "A–Z"; "za" -> "Z–A"; "default" -> "Padrão"; "popular" -> "Populares"; else -> "Recentes" }, fontSize = 11.sp)
                             }
                             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                                listOf("default" to "Padrão", "recent" to "Recentes", "az" to "A–Z", "za" to "Z–A").forEach { (key, label) ->
+                                (listOf("default" to "Padrão", "recent" to "Recentes") + (if (contentLabel == "SÉRIES") listOf("popular" to "Populares") else emptyList()) + listOf("az" to "A–Z", "za" to "Z–A")).forEach { (key, label) ->
                                     DropdownMenuItem(text = { Text(label) }, onClick = { menu = false; onSort(key) })
                                 }
                             }
                         }
                         LazyColumn(Modifier.weight(1f)) {
                             item { MovieCategory("ADICIONADOS RECENTEMENTE", categoryId == null && sort == "recent" && !favoritesOnly) { onCategory(null); onSort("recent") } }
-                            item { MovieCategory("TUDO", categoryId == null && sort != "recent" && !favoritesOnly) { onCategory(null); onSort("default") } }
+                            if (contentLabel == "SÉRIES") item { MovieCategory("POPULARES", categoryId == null && sort == "popular" && !favoritesOnly) { onCategory(null); onSort("popular") } }
+                            item { MovieCategory("TUDO", categoryId == null && sort !in listOf("recent", "popular") && !favoritesOnly) { onCategory(null); onSort("default") } }
                             item { MovieCategory("FAVORITOS", favoritesOnly, onFavorites) }
                             items(categories, key = { it.id }) { category -> MovieCategory(category.name, category.id == categoryId && !favoritesOnly) { onCategory(category.id) } }
                         }

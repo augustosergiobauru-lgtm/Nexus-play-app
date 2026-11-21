@@ -90,8 +90,6 @@ fun NexusHomeScreen(
         }
     }
     var query by remember { mutableStateOf("") }
-    var homeSearchOpen by remember { mutableStateOf(false) }
-    androidx.activity.compose.BackHandler(enabled = selected == 0 && homeSearchOpen) { homeSearchOpen = false; query = "" }
     val context = androidx.compose.ui.platform.LocalContext.current
     val parental = remember(session.userId) { NexusParental(context, session.userId) }
     var adultUnlocked by remember(session.userId) { mutableStateOf(false) }
@@ -388,7 +386,6 @@ fun NexusHomeScreen(
                     NexusBrandMark(Modifier.size(36.dp))
                     Spacer(Modifier.width(8.dp))
                     Text("NEXUS PLAY", color = gold, fontSize = 23.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                    IconButton(onClick = { homeSearchOpen = !homeSearchOpen; query = "" }, modifier = Modifier.size(36.dp)) { Icon(Icons.Filled.Search, "Pesquisar", tint = gold) }
                     IconButton(onClick = { selected = 4 }, modifier = Modifier.size(36.dp)) { Icon(Icons.Filled.Menu, "Menu", tint = gold) }
                 }
                 if (playbackBusy) {
@@ -398,14 +395,7 @@ fun NexusHomeScreen(
                 playbackError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 if (selected != 0) Text(tabs[selected], style = MaterialTheme.typography.headlineSmall)
                 if (selected == 0) {
-                    if (homeSearchOpen) NexusSearchField(query, { query = it }, hint = "Pesquisar filmes, séries e canais…")
-                    if (query.isNotBlank()) {
-                        NexusGlobalSearch(session, catalog, query, adultUnlocked,
-                            onOpen = { entry ->
-                                if (entry.type == "series") { selected = 3; seriesDetail = entry }
-                                else play(entry)
-                            }, modifier = if (compactHome) Modifier.weight(1f) else Modifier.heightIn(max = 500.dp))
-                    } else NexusHomeDashboard(
+                    NexusHomeDashboard(
                         items = homeItems.filter { it.type != "series" && allowed(it) } + NexusSeries.shows(homeItems.filter { it.type == "series" && allowed(it) }), loading = homeLoading, failed = homeFailed,
                         busy = playbackBusy, onRetry = { homeRetry++ },
                         onOpen = { entry ->

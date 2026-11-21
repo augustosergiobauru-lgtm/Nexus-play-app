@@ -79,3 +79,7 @@ globalThis.fetch=realFetch;
 console.log(JSON.stringify({total_passed:passed}));
 
 
+
+const posterRows=xtreamRows([{id:42,title:'Show S01E01',_series_cover:'https://images.test/show.jpg',info:{movie_image:'https://images.test/episode.jpg'}}],[],'series',server,credentials);
+assert.equal(posterRows.rows[0].logo_url,'https://images.test/show.jpg');
+console.log('PASS series artwork uses show poster instead of episode still');
