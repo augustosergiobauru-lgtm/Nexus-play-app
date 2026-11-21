@@ -81,7 +81,7 @@ fun NexusMoviesScreen(
                                     MoviePoster(movie, Modifier.fillMaxWidth().aspectRatio(0.61f), selected?.id == movie.id)
                                     Text(movie.title, color = Color.White, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
                                     if (!landscape && selectedId == movie.id) {
-                                        TextButton(onClick = { onPlay(movie) }, enabled = !busy) { Text("Assistir") }
+                                        TextButton(onClick = { onPlay(movie) }, enabled = !busy) { Text(if (contentLabel == "SÉRIES") "Temporadas e episódios" else "Assistir") }
                                         TextButton(onClick = { onFavorite(movie) }) { Text(if (movie.id in favorites) "★ Favorito" else "☆ Favoritar") }
                                     }
                                 }
@@ -93,7 +93,7 @@ fun NexusMoviesScreen(
                         selected?.let { movie ->
                             MoviePoster(movie, Modifier.fillMaxWidth().aspectRatio(0.67f))
                             Text(movie.title, color = MovieGold, fontSize = 18.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 14.dp))
-                            Button(onClick = { onPlay(movie) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.PlayArrow, null); Text("Assistir") }
+                            Button(onClick = { onPlay(movie) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.PlayArrow, null); Text(if (contentLabel == "SÉRIES") "Temporadas e episódios" else "Assistir") }
                             OutlinedButton(onClick = { onFavorite(movie) }, modifier = Modifier.fillMaxWidth()) { Text(if (movie.id in favorites) "★ Favorito" else "☆ Favoritar") }
                             movie.synopsis?.let { Text(it, color = Color.LightGray, fontSize = 13.sp) }
                         }

@@ -16,7 +16,7 @@ import org.junit.runner.RunWith
 class SeriesSettingsTest {
     @get:Rule val rule = createAndroidComposeRule<MainActivity>()
 
-    @Test fun seriesHasMovieBrowserAndOpensSelectedEpisode() {
+    @Test fun seriesBrowserOpensSeasons() {
         var played: String? = null
         val episode = NexusCatalog.Item("episode-fixture", "Série de teste S01E01", "episode", null)
         rule.activityRule.scenario.onActivity { activity ->
@@ -35,8 +35,33 @@ class SeriesSettingsTest {
         rule.onNodeWithText("FAVORITOS").assertIsDisplayed()
         rule.onNodeWithText("Ordem: Padrão").assertIsDisplayed()
         rule.onAllNodesWithContentDescription(episode.title).onFirst().performClick()
-        rule.onNodeWithText("Assistir").performScrollTo().assertIsDisplayed().performClick()
+        rule.onNodeWithText("Temporadas e episódios").performScrollTo().assertIsDisplayed().performClick()
         rule.runOnIdle { assertEquals(episode.id, played) }
+    }
+
+    @Test fun seriesDetailSelectsSeasonPlaysOriginalEpisodeAndReturns() {
+        var played: String? = null
+        var returned = false
+        val rows = listOf(
+            NexusCatalog.Item("ep-1", "Minha Série S01E01", "series", null),
+            NexusCatalog.Item("ep-2", "Minha Série S02E03", "series", null)
+        )
+        rule.activityRule.scenario.onActivity { activity ->
+            activity.setContent {
+                NexusSeriesDetailScreen(NexusSeries.shows(rows).single(), NexusSeries.episodes(rows, "Minha Série"),
+                    loading = false, busy = false, error = null,
+                    onBack = { returned = true }, onPlay = { played = it.id }, onRetry = {})
+            }
+            activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        }
+        rule.onNodeWithText("Episódio 1").assertIsDisplayed()
+        rule.onNodeWithText("Temporada 1 ▾").performClick()
+        rule.onNodeWithText("Temporada 2").performClick()
+        rule.onNodeWithText("Episódio 1").assertDoesNotExist()
+        rule.onNodeWithText("Episódio 3").performClick()
+        rule.runOnIdle { assertEquals("ep-2", played) }
+        rule.onNodeWithContentDescription("Voltar às séries").performClick()
+        rule.runOnIdle { assertTrue(returned) }
     }
 
     @Test fun clearCachePreservesFavoritesAndAccountPreferences() {

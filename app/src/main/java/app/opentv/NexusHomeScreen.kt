@@ -33,18 +33,6 @@ fun NexusHomeScreen(
     onExit: () -> Unit,
     catalog: NexusCatalog = remember { NexusSupabase.catalog() }
 ) {
-    var demo by remember { mutableStateOf(false) }
-    var hlsDemo by remember { mutableStateOf(false) }
-    if (demo) {
-        androidx.activity.compose.BackHandler { demo = false }
-        NexusPlaybackScreen(
-            session = session,
-            item = NexusCatalog.Item(if (hlsDemo) "public-demo-hls" else "public-demo-bbb", "Big Buck Bunny — © Blender Foundation", "movie", null),
-            authorizedUrl = if (hlsDemo) "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8" else "https://storage.googleapis.com/exoplayer-test-media-0/BigBuckBunny_320x180.mp4",
-            onClose = { demo = false }
-        )
-        return
-    }
     val gold = Color(0xFFE5C465)
     val tabs = listOf("Início", "Ao Vivo", "Filmes", "Séries", "Mais")
     var selected by remember { mutableStateOf(0) }
@@ -109,6 +97,7 @@ fun NexusHomeScreen(
     val prefs = remember(session.userId) { context.getSharedPreferences("nexus_favorites_" + session.userId, android.content.Context.MODE_PRIVATE) }
     var favorites by remember(session.userId) { mutableStateOf(prefs.getStringSet("ids", emptySet())?.toSet() ?: emptySet()) }
     var favoritesOnly by remember { mutableStateOf(false) }
+    var seriesLibrary by remember(session.userId) { mutableStateOf<List<NexusCatalog.Item>?>(null) }
     var seriesDetail by remember(session.userId) { mutableStateOf<NexusCatalog.Item?>(null) }
 
     val playbackAccess = remember { NexusSupabase.playbackAccess() }
@@ -202,6 +191,21 @@ fun NexusHomeScreen(
         error = null
         val generation = catalogGeneration
         val contentType = when (selected) { 1 -> "live"; 2 -> "movie"; 3 -> "series"; else -> null }
+        if (selected == 3) {
+            val cached = seriesLibrary
+            if (cached != null) {
+                items = cached; more = false; loading = false
+            } else catalog.allSeries(session) { result ->
+                handler.post {
+                    if (active.get() && generation == catalogGeneration) {
+                        loading = false
+                        result.fold(onSuccess = { rows -> seriesLibrary = rows; items = rows; more = false },
+                            onFailure = { error = "Não foi possível carregar as séries. Tente novamente." })
+                    }
+                }
+            }
+            return
+        }
         catalog.page(session, items.size, contentType = contentType, query = query, categoryId = if (selected == 1) liveCategoryId else if (selected in 2..3) movieCategory else null, recentlyAdded = selected in 2..3 && movieSort == "recent", sortOrder = if (selected == 1) liveSort else if (selected in 2..3) movieSort else "az") { result ->
             handler.post {
                 if (active.get()) {
@@ -278,20 +282,34 @@ fun NexusHomeScreen(
         )
         return
     }
+    if (selected == 3 && seriesDetail != null) {
+        NexusSeriesDetailScreen(
+            show = seriesDetail!!,
+            episodes = NexusSeries.episodes(seriesLibrary.orEmpty(), seriesDetail!!.title).filter { allowed(it.item) },
+            loading = loading, busy = playbackBusy, error = playbackError ?: error,
+            onBack = { seriesDetail = null }, onPlay = { play(it) }, onRetry = { more = true; loadPage() }
+        )
+        return
+    }
     if (selected in 2..3) {
         androidx.activity.compose.BackHandler { selected = 0; query = "" }
         NexusMoviesScreen(
             contentLabel = if (selected == 3) "SÉRIES" else "FILMES",
             categories = movieCategories.filter { adultUnlocked || !NexusContentPolicy.isAdult(it.name) },
             categoryId = movieCategory, onCategory = { movieCategory = it; movieFavorites = false },
-            items = items.filter { allowed(it) && (!movieFavorites || it.id in favorites) },
+            items = if (selected == 3) NexusSeries.shows(items.filter { allowed(it) }).filter { show ->
+                show.title.contains(query, ignoreCase = true) &&
+                    (movieCategory == null || items.any { it.categoryId == movieCategory && NexusSeries.key(it.title) == NexusSeries.key(show.title) }) &&
+                    (!movieFavorites || show.id in favorites)
+            }.let { shows -> when (movieSort) { "az" -> shows.sortedBy { it.title.lowercase() }; "za" -> shows.sortedByDescending { it.title.lowercase() }; "recent" -> shows.asReversed(); else -> shows } }
+            else items.filter { allowed(it) && (!movieFavorites || it.id in favorites) },
             query = query, onQuery = { query = it }, sort = movieSort, onSort = { movieSort = it },
             favoritesOnly = movieFavorites, onFavorites = { movieFavorites = !movieFavorites },
             favorites = favorites, onFavorite = { item ->
                 favorites = if (item.id in favorites) favorites - item.id else favorites + item.id
                 prefs.edit().putStringSet("ids", favorites.toSet()).apply()
             }, loading = loading, more = more, error = playbackError ?: error,
-            busy = playbackBusy, onMore = { loadPage() }, onPlay = { play(it) },
+            busy = playbackBusy, onMore = { loadPage() }, onPlay = { if (selected == 3) seriesDetail = it else play(it) },
             onBack = { selected = 0; query = "" }
         )
         return
@@ -361,7 +379,7 @@ fun NexusHomeScreen(
                 if (selected != 0) Text(tabs[selected], style = MaterialTheme.typography.headlineSmall)
                 if (selected == 0) {
                     NexusHomeDashboard(
-                        items = homeItems.filter { allowed(it) }, loading = homeLoading, failed = homeFailed,
+                        items = homeItems.filter { it.type != "series" && allowed(it) } + NexusSeries.shows(homeItems.filter { it.type == "series" && allowed(it) }), loading = homeLoading, failed = homeFailed,
                         busy = playbackBusy, onRetry = { homeRetry++ },
                         onOpen = { entry ->
                             if (entry.type == "series") { selected = 3; seriesDetail = entry } else play(entry)

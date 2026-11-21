@@ -57,7 +57,7 @@ fun NexusPlaybackScreen(session: NexusAuth.Session, item: NexusCatalog.Item, aut
         }
     }
     BackHandler {
-        if (expanded) expanded = false else onClose()
+        onClose()
     }
     val gold = Color(0xFFE5C465)
     Column(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding()) {
@@ -81,8 +81,8 @@ fun NexusPlaybackScreen(session: NexusAuth.Session, item: NexusCatalog.Item, aut
                 color = Color.Black.copy(alpha = 0.65f),
                 shape = androidx.compose.foundation.shape.CircleShape
             ) {
-                IconButton(onClick = { expanded = false }) {
-                    Icon(Icons.Filled.ArrowBack, contentDescription = "Voltar da tela cheia", tint = gold)
+                IconButton(onClick = onClose) {
+                    Icon(Icons.Filled.ArrowBack, contentDescription = "Voltar ao catálogo", tint = gold)
                 }
             }
             Surface(

@@ -39,9 +39,24 @@ class NexusCatalog(
         })
     }
 
+    /** Fetch every metadata page before grouping, so seasons crossing pages stay together. */
+    fun allSeries(session: NexusAuth.Session, callback: (Result<List<Item>>) -> Unit) {
+        val collected = mutableListOf<Item>()
+        fun next(offset: Int) {
+            page(session, offset, contentType = "series", pageSize = 1000, sortOrder = "default") { result ->
+                result.fold(onSuccess = { rows ->
+                    collected.addAll(rows)
+                    if (rows.size == 1000) next(offset + rows.size)
+                    else callback(Result.success(collected.distinctBy { it.id }))
+                }, onFailure = { callback(Result.failure(it)) })
+            }
+        }
+        next(0)
+    }
+
     fun page(session: NexusAuth.Session, offset: Int = 0, contentType: String? = null, query: String = "", categoryId: String? = null, recentlyAdded: Boolean = false, pageSize: Int = 100, sortOrder: String = "az", callback: (Result<List<Item>>) -> Unit) {
         try {
-            require(offset >= 0 && pageSize in 1..100)
+            require(offset >= 0 && pageSize in 1..1000)
             val base = (projectUrl.trimEnd('/') + "/rest/v1/channels").toHttpUrl()
             require(base.isHttps)
             require(contentType == null || contentType in setOf("live", "movie", "series"))
@@ -53,10 +68,7 @@ class NexusCatalog(
                 .addQueryParameter("offset", offset.toString())
             categoryId?.let { builder.addQueryParameter("category_id", "eq.$it") }
             contentType?.let { builder.addQueryParameter("content_kind", "eq.$it") }
-            if (recentlyAdded && contentType == "series") {
-                // Home shows one entry per show, rather than dozens of episodes of the same show.
-                builder.addQueryParameter("title", "imatch. S0?1E0?1([^0-9]|$)")
-            }
+            if (contentType == "movie") builder.addQueryParameter("title", "not.ilike.*Big Buck Bunny*")
             val search = query.trim().take(100).replace("*", "").replace("%", "").replace("_", "")
             if (search.isNotEmpty()) builder.addQueryParameter("title", "ilike.%$search%")
             val url = builder.build()
