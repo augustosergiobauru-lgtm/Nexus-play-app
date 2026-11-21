@@ -9,7 +9,7 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [28])
+@Config(sdk = [28], application = android.app.Application::class)
 class NexusParentalTest {
     @Test fun pinPersistsPerAccountAndDoesNotStorePlaintext() {
         val context = RuntimeEnvironment.getApplication()
