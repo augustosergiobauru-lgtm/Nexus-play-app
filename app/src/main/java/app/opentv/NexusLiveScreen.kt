@@ -79,7 +79,9 @@ internal fun NexusLiveScreen(
                 IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Voltar", tint = Color.White) }
             }
             Row(Modifier.fillMaxWidth().weight(1f)) {
-                Column(Modifier.weight(0.27f).fillMaxHeight().background(LivePanel).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                LazyColumn(Modifier.weight(0.27f).fillMaxHeight().background(LivePanel).padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    item {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     OutlinedTextField(value = query, onValueChange = onQuery, placeholder = { Text("Pesquisar...", fontSize = 13.sp) }, singleLine = true,
                         modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(6.dp))
                     Box {
@@ -97,14 +99,14 @@ internal fun NexusLiveScreen(
                         Icon(Icons.Default.Lock, null, Modifier.size(16.dp))
                         Text("Controle parental", fontSize = 11.sp)
                     }
-                    LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    }
+                    }
                         item { LiveCategory("FAVORITOS", filter == "favorites") { filter = "favorites"; onCategory(null) } }
                         item { LiveCategory("ASSISTIDOS RECENTEMENTE", filter == "recent") { filter = "recent"; onCategory(null) } }
                         item { LiveCategory("TODOS OS CANAIS", filter == "all" && categoryId == null) { filter = "all"; onCategory(null) } }
                         items(categories, key = { it.id }) { category ->
                             LiveCategory(category.name, filter == "all" && categoryId == category.id) { filter = "all"; onCategory(category.id) }
                         }
-                    }
                 }
                 Column(Modifier.weight(0.43f).fillMaxHeight().padding(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
