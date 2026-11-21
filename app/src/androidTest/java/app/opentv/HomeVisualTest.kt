@@ -34,12 +34,12 @@ class HomeVisualTest {
         val client = OkHttpClient.Builder().addInterceptor { chain ->
             val request = chain.request()
             val response = if (request.url.encodedPath.endsWith("/categories")) "[]" else {
-                assertEquals("id,title,content_type,category_id,logo_url,categories(name)", request.url.queryParameter("select"))
+                assertEquals("id,title,content_type,category_id,logo_url,created_at,categories(name)" + if (request.url.encodedPath.endsWith("/series_catalog")) ",poster_url" else "", request.url.queryParameter("select"))
                 assertEquals("created_at.desc,id.desc", request.url.queryParameter("order"))
                 assertEquals("48", request.url.queryParameter("limit"))
                 val kind = request.url.queryParameter("content_kind")
                 if (kind == "eq.series") {
-                    assertTrue(request.url.queryParameter("title").orEmpty().startsWith("imatch."))
+                    assertTrue(request.url.encodedPath.endsWith("/series_catalog"))
                     fixture.getJSONArray("series").toString()
                 } else {
                     assertEquals("eq.movie", kind)

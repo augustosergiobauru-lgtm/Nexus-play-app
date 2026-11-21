@@ -15,6 +15,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -32,7 +34,10 @@ fun NexusSeriesDetailScreen(
     var seasonMenu by remember { mutableStateOf(false) }
     BackHandler(onBack = onBack)
     MaterialTheme(colorScheme = darkColorScheme(primary = gold, onPrimary = Color.Black, surface = Color(0xFF191919))) {
-        Column(Modifier.fillMaxSize().background(Color(0xFF080808)).safeDrawingPadding().padding(16.dp)) {
+        Box(Modifier.fillMaxSize().background(Color(0xFF080808))) {
+        AsyncImage(model = show.logoUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color.Black.copy(alpha = .94f), Color.Black.copy(alpha = .82f)))))
+        Column(Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Voltar às séries", tint = gold) }
                 Text(show.title, color = gold, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -61,16 +66,27 @@ fun NexusSeriesDetailScreen(
                         LazyColumn(Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             items(episodes.filter { it.season == season }, key = { it.item.id }) { episode ->
                                 OutlinedButton(onClick = { onPlay(episode.item) }, enabled = !busy, shape = RoundedCornerShape(10.dp),
-                                    modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(14.dp)) {
-                                    Icon(Icons.Default.PlayArrow, null, tint = gold)
-                                    Text(if (episode.number > 0) "Episódio ${episode.number}" else episode.item.title,
-                                        modifier = Modifier.weight(1f).padding(start = 10.dp), color = Color.White)
+                                    modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(8.dp), colors = ButtonDefaults.outlinedButtonColors(containerColor = Color(0xFF171717).copy(alpha = .85f))) {
+                                    Box(Modifier.width(112.dp).height(64.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF242018)), contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Default.PlayArrow, null, tint = gold)
+                                        AsyncImage(model = show.logoUrl ?: episode.item.logoUrl, contentDescription = null,
+                                            contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+                                    }
+                                    Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                                        Text(if (episode.number > 0) "Episódio ${episode.number}" else episode.item.title,
+                                            color = Color.White, fontWeight = FontWeight.Bold)
+                                        val synopsis = episode.item.synopsis
+                                        Text(synopsis ?: "Sinopse não disponível", color = Color.LightGray,
+                                            style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    }
+                                    Icon(Icons.Default.PlayArrow, "Assistir", tint = gold)
                                 }
                             }
                         }
                     }
                 }
             }
+        }
         }
     }
 }

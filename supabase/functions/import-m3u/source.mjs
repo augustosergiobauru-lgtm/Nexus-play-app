@@ -33,7 +33,7 @@ export function xtreamRows(entries,categories,section,server,credentials){
   const path=[section,credentials.username,credentials.password,id+'.'+extension].map(encodeURIComponent).join('/');
   const stream_url=new URL(path,server).href;
   if(seen.has(stream_url)){duplicates++;continue;}seen.add(stream_url);
-  rows.push({source_position:Number.isSafeInteger(Number(row.num))&&Number(row.num)>0?Number(row.num):null,title,stream_url,content_type:section,group:groups.get(text(row.category_id))||text(row._group)||'Sem categoria',external_id:text(row.epg_channel_id)||section+':'+id,logo_url:image(row.stream_icon||row.cover||row.info?.movie_image)});
+  rows.push({source_position:Number.isSafeInteger(Number(row.num))&&Number(row.num)>0?Number(row.num):null,title,stream_url,content_type:section,group:groups.get(text(row.category_id))||text(row._group)||'Sem categoria',external_id:text(row.epg_channel_id)||section+':'+id,logo_url:image(section==='series' ? (row._series_cover||row.cover||row.stream_icon||row.info?.movie_image) : (row.stream_icon||row.cover||row.info?.movie_image))});
  }
  return {rows,invalid,duplicates};
 }
@@ -66,7 +66,7 @@ export async function loadXtream(source,credentials,section='live',seriesIndex=0
    const info=await json('get_series_info',{series_id:text(show.series_id)});
    if(!info.episodes||typeof info.episodes!=='object')throw Error('XTREAM_INVALID_EPISODES');
    const group=categories.find(c=>text(c.category_id)===text(show.category_id))?.category_name;
-   entries=Object.values(info.episodes).flat().map(ep=>({...ep,_group:group}));
+   entries=Object.values(info.episodes).flat().map(ep=>({...ep,_group:group,_series_cover:info.info?.cover||show.cover}));
    entries.sort((a,b)=>text(a.id).localeCompare(text(b.id),'en',{numeric:true}));
    if(seriesIndex+1<catalog.length){nextSection='series';nextSeriesIndex=seriesIndex+1;}
   }else entries=[];

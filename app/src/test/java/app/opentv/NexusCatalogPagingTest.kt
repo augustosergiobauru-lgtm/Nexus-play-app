@@ -89,4 +89,24 @@ class NexusCatalogPagingTest {
         assertEquals(2, episode.season)
         assertEquals(3, episode.number)
     }
+    @Test fun popularSeriesPreservePaginationFiltersAndPreferShowPoster() {
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            val request = chain.request()
+            assertEquals("/rest/v1/series_catalog", request.url.encodedPath)
+            assertEquals("popularity_score.desc.nullslast,title.asc,id.asc", request.url.queryParameter("order"))
+            assertEquals("100", request.url.queryParameter("offset"))
+            assertEquals("eq.category-fixture", request.url.queryParameter("category_id"))
+            assertEquals("ilike.%Show%", request.url.queryParameter("title"))
+            Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("OK")
+                .body("""[{"id":"playlist:Show","title":"Show","content_type":"series","poster_url":"https://images.test/show.jpg","logo_url":"https://images.test/episode.jpg"}]""".toResponseBody()).build()
+        }.build()
+        val latch = CountDownLatch(1)
+        var result: Result<List<NexusCatalog.Item>>? = null
+        NexusCatalog("https://catalog.test", "fixture", client).page(session, offset = 100,
+            contentType = "series", seriesShows = true, sortOrder = "popular", categoryId = "category-fixture", query = "Show") {
+            result = it; latch.countDown()
+        }
+        assertTrue(latch.await(10, TimeUnit.SECONDS))
+        assertEquals("https://images.test/show.jpg", result!!.getOrThrow().single().logoUrl)
+    }
 }

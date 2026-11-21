@@ -186,6 +186,8 @@ fun NexusSettingsScreen(session: NexusAuth.Session, onParental: () -> Unit, onEx
                         Text("Precisa de ajuda? Copie o diagnóstico e envie ao atendimento que forneceu sua assinatura.")
                         Button(onClick = { copyDiagnostic() }) { Text("Copiar diagnóstico") }
                         Text("Conteúdo travando: teste a conexão e reinicie o roteador.\nTela sem carregar: confira o plano e tente novamente.\nTroca de aparelho: solicite ao atendimento.")
+                        Text("Popularidade das séries: TVmaze (CC BY-SA).", color = Color.Gray)
+                        TextButton(onClick = { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://www.tvmaze.com"))) }) { Text("TVmaze · fonte dos metadados") }
                         Text("Versão ${context.packageManager.getPackageInfo(context.packageName, 0).versionName}", color = Color.Gray)
                     }
                 }

@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.pm.ActivityInfo
 import androidx.activity.compose.setContent
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -86,5 +87,30 @@ class SeriesSettingsTest {
         assertFalse(options.getBoolean("resume", true))
         favorites.edit().clear().commit()
         options.edit().remove("resume").commit()
+    }
+    @Test fun landscapeSearchAcceptsRepeatedEditsAndPopularFilter() {
+        var chosenSort = ""
+        rule.activityRule.scenario.onActivity { activity ->
+            activity.setContent {
+                var query by remember { mutableStateOf("") }
+                var sort by remember { mutableStateOf("default") }
+                NexusMoviesScreen(contentLabel = "SÉRIES", categories = emptyList(), categoryId = null,
+                    onCategory = {}, items = emptyList(), query = query, onQuery = { query = it },
+                    sort = sort, onSort = { sort = it; chosenSort = it },
+                    favoritesOnly = false, onFavorites = {}, favorites = emptySet(), onFavorite = {},
+                    loading = false, more = false, error = null, busy = false, onMore = {}, onPlay = {}, onBack = {})
+            }
+            activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        }
+        rule.waitUntil(10000) { rule.activity.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE }
+        repeat(4) { i ->
+            rule.onNode(hasSetTextAction()).performClick().performTextReplacement("Série $i")
+            rule.onNode(hasSetTextAction()).assertTextContains("Série $i")
+            rule.onNode(hasSetTextAction()).performTextClearance()
+        }
+        rule.onNodeWithText("Ordem: Padrão").performClick()
+        rule.onNodeWithText("Populares").performClick()
+        rule.runOnIdle { assertEquals("popular", chosenSort) }
+        rule.onNodeWithText("Ordem: Populares").assertIsDisplayed()
     }
 }

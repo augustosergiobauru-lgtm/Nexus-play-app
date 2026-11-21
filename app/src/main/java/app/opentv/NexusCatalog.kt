@@ -47,9 +47,9 @@ class NexusCatalog(
             require(base.isHttps)
             require(contentType == null || contentType in setOf("live", "movie", "series"))
             val builder = base.newBuilder()
-                .addQueryParameter("select", "id,title,content_type,category_id,logo_url,created_at,categories(name)")
+                .addQueryParameter("select", "id,title,content_type,category_id,logo_url,created_at,categories(name)" + if (seriesShows) ",poster_url" else "")
                 .addQueryParameter("is_active", "eq.true")
-                .addQueryParameter("order", if (recentlyAdded) "created_at.desc,id.desc" else when (sortOrder) { "default" -> "source_position.asc.nullslast,created_at.asc,id.asc"; "za" -> "title.desc,id.desc"; else -> "title.asc,id.asc" })
+                .addQueryParameter("order", if (recentlyAdded) "created_at.desc,id.desc" else when (sortOrder) { "popular" -> if (seriesShows) "popularity_score.desc.nullslast,title.asc,id.asc" else "title.asc,id.asc"; "default" -> "source_position.asc.nullslast,created_at.asc,id.asc"; "za" -> "title.desc,id.desc"; else -> "title.asc,id.asc" })
                 .addQueryParameter("limit", pageSize.toString())
                 .addQueryParameter("offset", offset.toString())
             seriesTitle?.let { builder.addQueryParameter("series_title", "eq.$it") }
@@ -77,7 +77,8 @@ class NexusCatalog(
                                 Item(row.getString("id"), row.getString("title"),
                                     row.getString("content_type"),
                                     if (row.isNull("category_id")) null else row.getString("category_id"),
-                                    row.optString("logo_url").takeIf { it.isNotBlank() && it != "null" },
+                                    row.optString("poster_url").takeIf { seriesShows && it.isNotBlank() && it != "null" }
+                                        ?: row.optString("logo_url").takeIf { it.isNotBlank() && it != "null" },
                                     listOf("synopsis", "overview", "description", "plot").firstNotNullOfOrNull { key ->
                                         row.optString(key).takeIf { it.isNotBlank() && it != "null" }
                                     }, NexusContentPolicy.isAdult(row.getString("title"), row.optJSONObject("categories")?.optString("name").orEmpty()), row.optString("created_at").takeIf { it.isNotBlank() && it != "null" })

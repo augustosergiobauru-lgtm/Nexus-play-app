@@ -395,14 +395,7 @@ fun NexusHomeScreen(
                 playbackError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 if (selected != 0) Text(tabs[selected], style = MaterialTheme.typography.headlineSmall)
                 if (selected == 0) {
-                    NexusSearchField(query, { query = it }, hint = "Pesquisar filmes, séries e canais…")
-                    if (query.isNotBlank()) {
-                        NexusGlobalSearch(session, catalog, query, adultUnlocked,
-                            onOpen = { entry ->
-                                if (entry.type == "series") { selected = 3; seriesDetail = entry }
-                                else play(entry)
-                            }, modifier = if (compactHome) Modifier.weight(1f) else Modifier.heightIn(max = 500.dp))
-                    } else NexusHomeDashboard(
+                    NexusHomeDashboard(
                         items = homeItems.filter { it.type != "series" && allowed(it) } + NexusSeries.shows(homeItems.filter { it.type == "series" && allowed(it) }), loading = homeLoading, failed = homeFailed,
                         busy = playbackBusy, onRetry = { homeRetry++ },
                         onOpen = { entry ->
