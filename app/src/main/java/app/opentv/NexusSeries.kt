@@ -16,10 +16,12 @@ object NexusSeries {
         return title.substring(0, marker.range.first).trim().trimEnd('-', '|', ':', '.', ' ').ifBlank { title.trim() }
     }
     fun key(rawTitle: String) = title(rawTitle).lowercase(Locale.ROOT).replace(Regex("\\s+"), " ")
-    fun shows(items: List<NexusCatalog.Item>): List<NexusCatalog.Item> = items.groupBy { key(it.title) }.values.map { episodes ->
+    fun shows(items: List<NexusCatalog.Item>, categoryId: String? = null): List<NexusCatalog.Item> = items.groupBy { key(it.title) }.values
+        .filter { episodes -> categoryId == null || episodes.any { it.categoryId == categoryId } }.map { episodes ->
         val representative = episodes.first()
         representative.copy(id = "series:" + key(representative.title), title = title(representative.title), type = "series",
-            logoUrl = episodes.firstOrNull { !it.logoUrl.isNullOrBlank() }?.logoUrl)
+            logoUrl = episodes.firstOrNull { !it.logoUrl.isNullOrBlank() }?.logoUrl,
+            createdAt = episodes.mapNotNull { it.createdAt }.maxOrNull())
     }
     fun episodes(items: List<NexusCatalog.Item>, showTitle: String): List<Episode> = items
         .filter { key(it.title) == key(showTitle) }.distinctBy { it.id }.map { item ->

@@ -297,11 +297,10 @@ fun NexusHomeScreen(
             contentLabel = if (selected == 3) "SÉRIES" else "FILMES",
             categories = movieCategories.filter { adultUnlocked || !NexusContentPolicy.isAdult(it.name) },
             categoryId = movieCategory, onCategory = { movieCategory = it; movieFavorites = false },
-            items = if (selected == 3) NexusSeries.shows(items.filter { allowed(it) }).filter { show ->
+            items = if (selected == 3) NexusSeries.shows(items.filter { allowed(it) }, movieCategory).filter { show ->
                 show.title.contains(query, ignoreCase = true) &&
-                    (movieCategory == null || items.any { it.categoryId == movieCategory && NexusSeries.key(it.title) == NexusSeries.key(show.title) }) &&
                     (!movieFavorites || show.id in favorites)
-            }.let { shows -> when (movieSort) { "az" -> shows.sortedBy { it.title.lowercase() }; "za" -> shows.sortedByDescending { it.title.lowercase() }; "recent" -> shows.asReversed(); else -> shows } }
+            }.let { shows -> when (movieSort) { "az" -> shows.sortedBy { it.title.lowercase() }; "za" -> shows.sortedByDescending { it.title.lowercase() }; "recent" -> shows.sortedByDescending { it.createdAt }; else -> shows } }
             else items.filter { allowed(it) && (!movieFavorites || it.id in favorites) },
             query = query, onQuery = { query = it }, sort = movieSort, onSort = { movieSort = it },
             favoritesOnly = movieFavorites, onFavorites = { movieFavorites = !movieFavorites },

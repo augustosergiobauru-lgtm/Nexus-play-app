@@ -11,7 +11,7 @@ class NexusCatalog(
     private val publishableKey: String,
     private val client: OkHttpClient = OkHttpClient.Builder().followRedirects(false).followSslRedirects(false).build()
 ) {
-    data class Item(val id: String, val title: String, val type: String, val categoryId: String?, val logoUrl: String? = null, val synopsis: String? = null, val adult: Boolean = false)
+    data class Item(val id: String, val title: String, val type: String, val categoryId: String?, val logoUrl: String? = null, val synopsis: String? = null, val adult: Boolean = false, val createdAt: String? = null)
 
     data class Category(val id: String, val name: String)
     fun liveCategories(session: NexusAuth.Session, callback: (Result<List<Category>>) -> Unit) = categories(session, "live", callback)
@@ -61,7 +61,7 @@ class NexusCatalog(
             require(base.isHttps)
             require(contentType == null || contentType in setOf("live", "movie", "series"))
             val builder = base.newBuilder()
-                .addQueryParameter("select", "id,title,content_type,category_id,logo_url,categories(name)")
+                .addQueryParameter("select", "id,title,content_type,category_id,logo_url,created_at,categories(name)")
                 .addQueryParameter("is_active", "eq.true")
                 .addQueryParameter("order", if (recentlyAdded) "created_at.desc,id.desc" else when (sortOrder) { "default" -> "source_position.asc.nullslast,created_at.asc,id.asc"; "za" -> "title.desc,id.desc"; else -> "title.asc,id.asc" })
                 .addQueryParameter("limit", pageSize.toString())
@@ -92,7 +92,7 @@ class NexusCatalog(
                                     row.optString("logo_url").takeIf { it.isNotBlank() && it != "null" },
                                     listOf("synopsis", "overview", "description", "plot").firstNotNullOfOrNull { key ->
                                         row.optString(key).takeIf { it.isNotBlank() && it != "null" }
-                                    }, NexusContentPolicy.isAdult(row.getString("title"), row.optJSONObject("categories")?.optString("name").orEmpty()))
+                                    }, NexusContentPolicy.isAdult(row.getString("title"), row.optJSONObject("categories")?.optString("name").orEmpty()), row.optString("created_at").takeIf { it.isNotBlank() && it != "null" })
                             }
                         }
                     }
