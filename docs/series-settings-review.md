@@ -12,10 +12,14 @@ Alterações preparadas na branch `nexus/series-settings`, a partir da versão d
 - Meu dispositivo exibe o aparelho e consulta o vínculo real. Trocas são administrativas.
 - Suporte permite copiar diagnóstico sem tokens, senhas, URLs dos streams ou identificadores pessoais. Contém orientações rápidas. WhatsApp depende do número de atendimento.
 
-## Validação e pendências
+## Validação
 
-`git diff --check` passou. A compilação local foi impedida pelo bloqueio de acesso à distribuição Gradle e pela ausência do SDK Android. Ainda é necessário executar o Build no GitHub e testar o APK.
+A suíte verifica compilação Android, testes unitários, reprodução com ExoPlayer e VLC, seleção de uma série e preservação de favoritos ao apagar cache. O cadastro no servidor foi verificado com rollback: primeiro aparelho aceito, repetição aceita, segundo aparelho recusado, revogação respeitada e usuário anônimo recusado.
 
-O servidor segue em modo de teste. O arquivo `supabase/single-device-account.sql` prepara cadastro inicial com assinatura válida e limite de um aparelho. Ele ainda não foi aplicado: a ativação exige coordenar o novo APK e resolver quatro vínculos antigos de teste do Redmi, preservando a instalação real. A RPC não permite substituir um aparelho ativo ou reativar identificadores revogados por conta própria.
+O identificador deriva do Android ID por aplicativo; copiar preferências antigas em um backup não copia a autorização para outro aparelho.
 
-O envio da branch ao GitHub foi bloqueado pela revisão automática. Nenhuma alteração foi publicada e nenhum APK novo foi gerado nesta etapa.
+## Operação
+
+Aplique `supabase/single-device-account.sql` antes de ativar `nexus_device_checks_enabled()`. Remova apenas os quatro registros antigos de teste do Redmi antes da ativação, para que o primeiro acesso do novo APK vincule o aparelho atual. Trocas posteriores são administrativas. A RPC exige assinatura válida e não permite substituir outro aparelho ativo nem reativar um vínculo revogado.
+
+O botão de WhatsApp depende da definição do número de atendimento. O suporte já permite copiar diagnóstico sem dados de autenticação.
