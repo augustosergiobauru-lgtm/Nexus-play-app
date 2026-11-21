@@ -52,6 +52,13 @@ internal class NexusPlayback(
         private set
     var muted by mutableStateOf(false)
         private set
+    var volume by mutableStateOf(1f)
+        private set
+    private var lastAudibleVolume = 1f
+    var videoTracks by mutableStateOf(emptyList<Track>())
+        private set
+    var qualityLabel by mutableStateOf("Automática")
+        private set
     var speed by mutableStateOf(1f)
         private set
     var audioTracks by mutableStateOf(emptyList<Track>())
@@ -124,7 +131,7 @@ internal class NexusPlayback(
                     fail(if (status != null) "O servidor recusou a reprodução (HTTP $status)." else "Não foi possível reproduzir esta transmissão.")
                 }
             })
-            p.volume = if (muted) 0f else 1f
+            p.volume = volume
             p.setPlaybackSpeed(speed)
             p.setMediaItem(MediaItem.fromUri(url))
             if (!live && position > 0) p.seekTo(position)
@@ -152,6 +159,8 @@ internal class NexusPlayback(
         buffering = true
         audioTracks = emptyList()
         subtitles = emptyList()
+        videoTracks = emptyList()
+        qualityLabel = "Automática"
         videoRendered = false
         engine = policy.engine
         waitingSince = System.currentTimeMillis()
@@ -159,7 +168,11 @@ internal class NexusPlayback(
     }
 
     fun surface(): View = if (engine == EngineFallback.Engine.EXO) {
-        PlayerView(context).apply { player = exo; useController = false }
+        PlayerView(context).apply {
+            player = exo
+            useController = false
+            resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+        }
     } else {
         VLCVideoLayout(context).also { layout ->
             vlcLayout = layout
@@ -168,9 +181,10 @@ internal class NexusPlayback(
                 lib = instance
                 val p = MediaPlayer(instance)
                 vlc = p
-                p.setVolume(if (muted) 0 else 100)
+                p.setVolume((volume * 100).toInt())
                 val token = generation
                 p.setUseOrientationFromBounds(true)
+                p.setVideoScale(MediaPlayer.ScaleType.SURFACE_BEST_FIT)
                 p.attachViews(layout, null, true, false)
                 p.setEventListener { event ->
                     if (!released && generation == token) when (event.type) {
@@ -179,7 +193,7 @@ internal class NexusPlayback(
                             hasPlayed = true
                             pendingSeek?.let { if (!live && p.isSeekable) { p.setTime(it); pendingSeek = null } }
                             p.setRate(speed)
-                            p.setVolume(if (muted) 0 else 100)
+                            p.setVolume((volume * 100).toInt())
                             if (!desiredPlay || !foreground) p.pause()
                             playing = desiredPlay && foreground
                             waitingSince = System.currentTimeMillis()
@@ -216,10 +230,13 @@ internal class NexusPlayback(
             fun tracks(type: Int): List<Track> = p.currentTracks.groups.filter { it.type == type }
                 .flatMapIndexed { groupIndex, group -> (0 until group.length).filter { group.isTrackSupported(it) }.map { i ->
                     val f = group.getTrackFormat(i)
-                    Track(groupIndex * 1000 + i, f.label ?: f.language ?: "Faixa ${i + 1}")
+                    Track(groupIndex * 1000 + i,
+                        if (type == C.TRACK_TYPE_VIDEO && f.height > 0) "${f.height}p"
+                        else f.label ?: f.language ?: "Faixa ${i + 1}")
                 } }
             audioTracks = tracks(C.TRACK_TYPE_AUDIO)
             subtitles = tracks(C.TRACK_TYPE_TEXT)
+            videoTracks = tracks(C.TRACK_TYPE_VIDEO)
         } else if (v != null) {
             pendingSeek?.let { if (v.isSeekable) { v.setTime(it); pendingSeek = null } }
             if (pendingSeek == null) position = v.time.coerceAtLeast(0L)
@@ -227,6 +244,7 @@ internal class NexusPlayback(
             seekable = v.isSeekable
             audioTracks = v.audioTracks?.map { Track(it.id, it.name) }.orEmpty()
             subtitles = v.spuTracks?.filter { it.id >= 0 }?.map { Track(it.id, it.name) }.orEmpty()
+            videoTracks = v.videoTracks?.filter { it.id >= 0 }?.map { Track(it.id, it.name) }.orEmpty()
         }
         val now = System.currentTimeMillis()
         if (hasPlayed && !live && position > 0 && now - lastProgressReportAt >= 5_000L) {
@@ -249,10 +267,26 @@ internal class NexusPlayback(
         position = target
         waitingSince = System.currentTimeMillis()
     }
-    fun toggleMute() {
-        muted = !muted
-        exo?.volume = if (muted) 0f else 1f
-        vlc?.setVolume(if (muted) 0 else 100)
+    fun changeVolume(value: Float) {
+        volume = value.coerceIn(0f, 1f)
+        muted = volume == 0f
+        if (!muted) lastAudibleVolume = volume
+        exo?.volume = volume
+        vlc?.setVolume((volume * 100).toInt())
+    }
+    fun toggleMute() = changeVolume(if (muted) lastAudibleVolume else 0f)
+
+    fun selectVideoTrack(id: Int) {
+        val p = exo
+        if (p != null) {
+            val builder = p.trackSelectionParameters.buildUpon().clearOverridesOfType(C.TRACK_TYPE_VIDEO)
+                .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, false)
+            if (id >= 0) p.currentTracks.groups.filter { it.type == C.TRACK_TYPE_VIDEO }.getOrNull(id / 1000)?.let {
+                builder.setOverrideForType(TrackSelectionOverride(it.mediaTrackGroup, id % 1000))
+            }
+            p.trackSelectionParameters = builder.build()
+        } else if (id >= 0) vlc?.setVideoTrack(id)
+        qualityLabel = videoTracks.firstOrNull { it.id == id }?.label ?: "Automática"
     }
     fun changeSpeed(value: Float) {
         speed = value

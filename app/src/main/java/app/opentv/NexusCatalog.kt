@@ -9,7 +9,7 @@ import java.io.IOException
 class NexusCatalog(
     private val projectUrl: String,
     private val publishableKey: String,
-    private val client: OkHttpClient = OkHttpClient.Builder().followRedirects(false).followSslRedirects(false).build()
+    private val client: OkHttpClient = OkHttpClient.Builder().callTimeout(20, java.util.concurrent.TimeUnit.SECONDS).followRedirects(false).followSslRedirects(false).build()
 ) {
     data class Item(val id: String, val title: String, val type: String, val categoryId: String?, val logoUrl: String? = null, val synopsis: String? = null, val adult: Boolean = false, val createdAt: String? = null)
 
@@ -37,21 +37,6 @@ class NexusCatalog(
                 } })
             }
         })
-    }
-
-    /** Fetch every metadata page before grouping, so seasons crossing pages stay together. */
-    fun allSeries(session: NexusAuth.Session, callback: (Result<List<Item>>) -> Unit) {
-        val collected = mutableListOf<Item>()
-        fun next(offset: Int) {
-            page(session, offset, contentType = "series", pageSize = 1000, sortOrder = "default") { result ->
-                result.fold(onSuccess = { rows ->
-                    collected.addAll(rows)
-                    if (rows.size == 1000) next(offset + rows.size)
-                    else callback(Result.success(collected.distinctBy { it.id }))
-                }, onFailure = { callback(Result.failure(it)) })
-            }
-        }
-        next(0)
     }
 
     fun page(session: NexusAuth.Session, offset: Int = 0, contentType: String? = null, query: String = "", categoryId: String? = null, recentlyAdded: Boolean = false, pageSize: Int = 100, sortOrder: String = "az", callback: (Result<List<Item>>) -> Unit) {

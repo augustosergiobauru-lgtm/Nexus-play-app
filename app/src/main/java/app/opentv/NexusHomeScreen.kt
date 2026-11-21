@@ -97,7 +97,6 @@ fun NexusHomeScreen(
     val prefs = remember(session.userId) { context.getSharedPreferences("nexus_favorites_" + session.userId, android.content.Context.MODE_PRIVATE) }
     var favorites by remember(session.userId) { mutableStateOf(prefs.getStringSet("ids", emptySet())?.toSet() ?: emptySet()) }
     var favoritesOnly by remember { mutableStateOf(false) }
-    var seriesLibrary by remember(session.userId) { mutableStateOf<List<NexusCatalog.Item>?>(null) }
     var seriesDetail by remember(session.userId) { mutableStateOf<NexusCatalog.Item?>(null) }
 
     val playbackAccess = remember { NexusSupabase.playbackAccess() }
@@ -191,21 +190,6 @@ fun NexusHomeScreen(
         error = null
         val generation = catalogGeneration
         val contentType = when (selected) { 1 -> "live"; 2 -> "movie"; 3 -> "series"; else -> null }
-        if (selected == 3) {
-            val cached = seriesLibrary
-            if (cached != null) {
-                items = cached; more = false; loading = false
-            } else catalog.allSeries(session) { result ->
-                handler.post {
-                    if (active.get() && generation == catalogGeneration) {
-                        loading = false
-                        result.fold(onSuccess = { rows -> seriesLibrary = rows; items = rows; more = false },
-                            onFailure = { error = "Não foi possível carregar as séries. Tente novamente." })
-                    }
-                }
-            }
-            return
-        }
         catalog.page(session, items.size, contentType = contentType, query = query, categoryId = if (selected == 1) liveCategoryId else if (selected in 2..3) movieCategory else null, recentlyAdded = selected in 2..3 && movieSort == "recent", sortOrder = if (selected == 1) liveSort else if (selected in 2..3) movieSort else "az") { result ->
             handler.post {
                 if (active.get()) {
@@ -227,6 +211,36 @@ fun NexusHomeScreen(
         error = null
         if (query.isNotBlank()) kotlinx.coroutines.delay(300)
         if (selected in 1..3) loadPage()
+    }
+    var episodeItems by remember(session.userId) { mutableStateOf(emptyList<NexusCatalog.Item>()) }
+    var episodesLoading by remember { mutableStateOf(false) }
+    var episodesError by remember { mutableStateOf<String?>(null) }
+    var episodesRetry by remember { mutableStateOf(0) }
+    DisposableEffect(session, seriesDetail?.id, episodesRetry) {
+        val alive = java.util.concurrent.atomic.AtomicBoolean(true)
+        episodeItems = emptyList()
+        episodesError = null
+        val show = seriesDetail
+        episodesLoading = show != null
+        if (show != null) {
+            fun next(offset: Int) {
+                if (!alive.get()) return
+                // Fetch only this show's metadata; grouping never waits for the whole library.
+                catalog.page(session, offset, contentType = "series", query = show.title, sortOrder = "az") { result ->
+                    handler.post {
+                        if (alive.get()) result.fold(onSuccess = { page ->
+                            episodeItems = (episodeItems + page.filter { NexusSeries.key(it.title) == NexusSeries.key(show.title) }).distinctBy { it.id }
+                            if (page.size == 100) next(offset + page.size) else episodesLoading = false
+                        }, onFailure = {
+                            episodesLoading = false
+                            episodesError = "Não foi possível carregar os episódios. Tente novamente."
+                        })
+                    }
+                }
+            }
+            next(0)
+        }
+        onDispose { alive.set(false) }
     }
     androidx.activity.compose.BackHandler(enabled = seriesDetail != null) { seriesDetail = null }
     val currentPlayback = playingItem
@@ -285,9 +299,9 @@ fun NexusHomeScreen(
     if (selected == 3 && seriesDetail != null) {
         NexusSeriesDetailScreen(
             show = seriesDetail!!,
-            episodes = NexusSeries.episodes(seriesLibrary.orEmpty(), seriesDetail!!.title).filter { allowed(it.item) },
-            loading = loading, busy = playbackBusy, error = playbackError ?: error,
-            onBack = { seriesDetail = null }, onPlay = { play(it) }, onRetry = { more = true; loadPage() }
+            episodes = NexusSeries.episodes(episodeItems, seriesDetail!!.title).filter { allowed(it.item) },
+            loading = episodesLoading, busy = playbackBusy, error = playbackError ?: episodesError,
+            onBack = { seriesDetail = null }, onPlay = { play(it) }, onRetry = { playbackError = null; episodesRetry++ }
         )
         return
     }

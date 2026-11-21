@@ -3,6 +3,8 @@ package app.opentv
 import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -12,6 +14,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
@@ -22,7 +26,9 @@ import app.opentv.player.NexusPlayback
 /** Mounted only after the existing subscription and device authorization gate. */
 @Composable
 fun NexusPlayer(authorizedUrl: String, modifier: Modifier = Modifier, resumePositionMs: Long = 0L,
-                isLive: Boolean = false, onProgress: (Long) -> Unit = {}) {
+                isLive: Boolean = false, onProgress: (Long) -> Unit = {},
+                title: String = "", onBack: (() -> Unit)? = null, fullscreen: Boolean = false,
+                onToggleFullscreen: (() -> Unit)? = null) {
     val context = LocalContext.current
     val uri = remember(authorizedUrl) { Uri.parse(authorizedUrl) }
     if (uri.scheme !in setOf("http", "https") || uri.host.isNullOrBlank()) return
@@ -46,13 +52,13 @@ fun NexusPlayer(authorizedUrl: String, modifier: Modifier = Modifier, resumePosi
     var panel by remember { mutableStateOf<String?>(null) }
     var controls by remember(authorizedUrl) { mutableStateOf(true) }
     var interaction by remember { mutableStateOf(0) }
-    LaunchedEffect(controls, interaction, panel) {
-        if (controls && panel == null) {
-            kotlinx.coroutines.delay(3000)
+    var scrub by remember { mutableStateOf<Float?>(null) }
+    LaunchedEffect(controls, interaction, panel, scrub != null) {
+        if (controls && panel == null && scrub == null) {
+            kotlinx.coroutines.delay(2500)
             controls = false
         }
     }
-    var scrub by remember { mutableStateOf<Float?>(null) }
     val gold = Color(0xFFE5C465)
     MaterialTheme(colorScheme = darkColorScheme(primary = gold, onPrimary = Color.Black, surface = Color(0xFF171717))) {
         Box(modifier.background(Color.Black)) {
@@ -60,11 +66,22 @@ fun NexusPlayer(authorizedUrl: String, modifier: Modifier = Modifier, resumePosi
                 AndroidView(modifier = Modifier.fillMaxSize(), factory = { session.surface() })
             }
             if (session.buffering && session.error == null) CircularProgressIndicator(Modifier.align(Alignment.Center), color = gold)
-            Box(Modifier.fillMaxSize().clickable { controls = !controls; interaction++ })
+            Box(Modifier.fillMaxSize().testTag("video-touch-area").clickable { controls = !controls; interaction++ })
+            if (controls && onBack != null) Row(
+                Modifier.align(Alignment.TopCenter).fillMaxWidth().background(Color.Black.copy(alpha = .55f)).padding(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Voltar ao catálogo", tint = gold) }
+                Text(title, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, color = Color.White)
+                if (onToggleFullscreen != null) IconButton(onClick = { onToggleFullscreen(); interaction++ }) {
+                    Icon(if (fullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
+                        if (fullscreen) "Sair da tela cheia" else "Tela cheia", tint = gold)
+                }
+            }
             if (controls) Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color.Black.copy(alpha = .25f))) {
                 if (session.seekable && session.duration > 0) {
                     Slider(value = scrub ?: session.position.toFloat().coerceIn(0f, session.duration.toFloat()),
-                        onValueChange = { scrub = it },
+                        onValueChange = { scrub = it; interaction++ },
                         onValueChangeFinished = { scrub?.let { session.seek(it.toLong()) }; scrub = null },
                         valueRange = 0f..session.duration.toFloat(), modifier = Modifier.fillMaxWidth().height(22.dp).padding(horizontal = 12.dp))
                 }
@@ -76,7 +93,8 @@ fun NexusPlayer(authorizedUrl: String, modifier: Modifier = Modifier, resumePosi
                     if (!isLive) IconButton(modifier = Modifier.size(32.dp), onClick = { interaction++; session.seek(session.position - 15_000L) }, enabled = session.seekable) { Icon(Icons.Default.FastRewind, "Voltar 15 segundos", Modifier.size(18.dp)) }
                     if (!isLive) IconButton(modifier = Modifier.size(32.dp), onClick = { interaction++; session.seek(session.position + 15_000L) }, enabled = session.seekable) { Icon(Icons.Default.FastForward, "Avançar 15 segundos", Modifier.size(18.dp)) }
                     Text(if (isLive) "AO VIVO" else timeLabel(session.position), Modifier.weight(1f), style = MaterialTheme.typography.labelSmall)
-                    IconButton(modifier = Modifier.size(32.dp), onClick = { session.toggleMute(); interaction++ }) { Icon(if (session.muted) Icons.Default.VolumeOff else Icons.Default.VolumeUp, "Ativar ou silenciar áudio", Modifier.size(18.dp)) }
+                    IconButton(modifier = Modifier.size(40.dp), onClick = { panel = "Volume"; interaction++ }) { Icon(if (session.muted) Icons.Default.VolumeOff else Icons.Default.VolumeUp, "Volume", Modifier.size(20.dp)) }
+                    IconButton(modifier = Modifier.size(40.dp), onClick = { panel = "Qualidade"; interaction++ }) { Icon(Icons.Default.HighQuality, "Qualidade do vídeo", Modifier.size(20.dp)) }
                     IconButton(modifier = Modifier.size(32.dp), onClick = { panel = "Opções"; interaction++ }) { Icon(Icons.Default.Settings, "Opções de reprodução", Modifier.size(18.dp)) }
                 }
             }
@@ -92,8 +110,22 @@ fun NexusPlayer(authorizedUrl: String, modifier: Modifier = Modifier, resumePosi
         panel?.let { title ->
             AlertDialog(onDismissRequest = { panel = null }, title = { Text(title) },
                 text = {
-                    Column {
+                    Column(Modifier.verticalScroll(rememberScrollState())) {
                         when (title) {
+                            "Volume" -> {
+                                Text("Volume: ${(session.volume * 100).toInt()}%")
+                                Slider(value = session.volume, onValueChange = session::changeVolume, valueRange = 0f..1f,
+                                    modifier = Modifier.testTag("playback-volume"))
+                                TextButton(onClick = session::toggleMute) { Text(if (session.muted) "Ativar som" else "Silenciar") }
+                            }
+                            "Qualidade" -> {
+                                Text("Atual: ${session.qualityLabel}")
+                                TextButton(onClick = { session.selectVideoTrack(-1); panel = null }) { Text("Automática") }
+                                session.videoTracks.forEach { track ->
+                                    TextButton(onClick = { session.selectVideoTrack(track.id); panel = null }) { Text(track.label) }
+                                }
+                                if (session.videoTracks.size <= 1) Text("A resolução depende da fonte. Este vídeo não oferece outras qualidades.")
+                            }
                             "Áudio", "Legendas" -> {
                                 val text = title == "Legendas"
                                 val tracks = if (text) session.subtitles else session.audioTracks
@@ -105,6 +137,8 @@ fun NexusPlayer(authorizedUrl: String, modifier: Modifier = Modifier, resumePosi
                                 TextButton(onClick = { session.changeSpeed(rate); panel = null }) { Text("${rate}x") }
                             }
                             else -> {
+                                TextButton(onClick = { panel = "Qualidade" }) { Text("Qualidade") }
+                                TextButton(onClick = { panel = "Volume" }) { Text("Volume") }
                                 TextButton(onClick = { panel = "Áudio" }) { Text("Áudio") }
                                 TextButton(onClick = { panel = "Legendas" }) { Text("Legendas") }
                                 TextButton(onClick = { panel = "Velocidade" }) { Text("Velocidade: ${session.speed}x") }
