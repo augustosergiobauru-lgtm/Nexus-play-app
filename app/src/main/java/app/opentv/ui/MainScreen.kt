@@ -288,14 +288,14 @@ private fun NavRail(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Image(
-                painter = painterResource(R.drawable.ic_opentv_logo),
-                contentDescription = "OpenTV",
+                painter = painterResource(R.drawable.nexus_launcher),
+                contentDescription = "Nexus Play",
                 modifier = Modifier.size(34.dp),
             )
             if (expanded) {
                 Spacer(Modifier.width(12.dp))
                 Text(
-                    "OpenTV",
+                    "Nexus Play",
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold,
