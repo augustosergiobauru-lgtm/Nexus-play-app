@@ -22,6 +22,7 @@ create policy series_read on public.series_catalog for select to authenticated u
  (select public.is_owner()) or (is_active and public.is_playlist_active(playlist_id) and exists (
  select 1 from public.subscriptions s where s.customer_id=(select public.current_customer_id())
  and s.status='active' and s.starts_at<=now() and s.expires_at>now())));
+revoke all on public.series_catalog from anon,authenticated;
 grant select on public.series_catalog to authenticated;
 -- The importer already writes channels. Maintain one small metadata row per show.
 create schema if not exists nexus_internal;
@@ -55,6 +56,7 @@ select playlist_id::text || ':' || series_title,playlist_id,series_title,
 from public.channels where content_kind='series' and is_active group by playlist_id,series_title;
 create index series_catalog_recent_idx on public.series_catalog(created_at desc,id desc) where is_active;
 create index series_catalog_title_idx on public.series_catalog(title,id) where is_active;
+create index if not exists channels_series_title_order_idx on public.channels(series_title,title,id) where is_active and content_kind='series';
 analyze public.series_catalog;
 analyze public.channels;
 notify pgrst,'reload schema';
