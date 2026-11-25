@@ -109,4 +109,23 @@ class NexusCatalogPagingTest {
         assertTrue(latch.await(10, TimeUnit.SECONDS))
         assertEquals("https://images.test/show.jpg", result!!.getOrThrow().single().logoUrl)
     }
+    @Test fun recentChannelsLoadByIdOutsideTheCurrentCatalogPage() {
+        val id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            val request = chain.request()
+            assertEquals("in.($id)", request.url.queryParameter("id"))
+            assertEquals("eq.live", request.url.queryParameter("content_kind"))
+            assertNull(request.url.queryParameter("category_id"))
+            assertEquals("0", request.url.queryParameter("offset"))
+            Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("OK")
+                .body("""[{"id":"$id","title":"Canal assistido","content_type":"live"}]""".toResponseBody()).build()
+        }.build()
+        val latch = CountDownLatch(1)
+        var result: Result<List<NexusCatalog.Item>>? = null
+        NexusCatalog("https://catalog.test", "fixture", client).page(session, contentType = "live", ids = listOf(id)) {
+            result = it; latch.countDown()
+        }
+        assertTrue(latch.await(10, TimeUnit.SECONDS))
+        assertEquals(id, result!!.getOrThrow().single().id)
+    }
 }

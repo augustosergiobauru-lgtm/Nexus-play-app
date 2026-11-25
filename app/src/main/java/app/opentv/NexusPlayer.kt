@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
@@ -48,6 +49,14 @@ fun NexusPlayer(authorizedUrl: String, modifier: Modifier = Modifier, resumePosi
         lifecycle.addObserver(observer)
         session.setForeground(lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED))
         onDispose { lifecycle.removeObserver(observer); session.release() }
+    }
+    // Apply to the shared Compose view so this covers both engines and mini/fullscreen.
+    val playbackView = LocalView.current
+    val keepAwake = session.error == null && (session.playing || session.buffering)
+    DisposableEffect(playbackView, keepAwake) {
+        val previous = playbackView.keepScreenOn
+        playbackView.keepScreenOn = previous || keepAwake
+        onDispose { playbackView.keepScreenOn = previous }
     }
     var panel by remember { mutableStateOf<String?>(null) }
     var controls by remember(authorizedUrl) { mutableStateOf(true) }

@@ -290,7 +290,7 @@ fun NexusHomeScreen(
             onFavorite = { item ->
                 favorites = if (item.id in favorites) favorites - item.id else favorites + item.id
                 prefs.edit().putStringSet("ids", favorites.toSet()).apply()
-            }, userId = session.userId, selectedId = requestedLiveId,
+            }, userId = session.userId, session = session, catalog = catalog, adultUnlocked = adultUnlocked, selectedId = requestedLiveId,
             title = currentPlayback?.title, busy = playbackBusy,
             error = playbackError ?: error ?: categoryError, loading = loading, more = more,
             onMore = { loadPage() }, onPlay = { play(it) },

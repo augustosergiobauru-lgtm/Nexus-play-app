@@ -34,7 +34,7 @@ internal fun NexusLiveScreen(
     categories: List<NexusCatalog.Category>, categoryId: String?,
     onCategory: (String?) -> Unit, query: String, onQuery: (String) -> Unit,
     channels: List<NexusCatalog.Item>, favorites: Set<String>, onFavorite: (NexusCatalog.Item) -> Unit,
-    userId: String, selectedId: String?, title: String?, busy: Boolean,
+    userId: String, session: NexusAuth.Session, catalog: NexusCatalog, adultUnlocked: Boolean, selectedId: String?, title: String?, busy: Boolean,
     error: String?, loading: Boolean, more: Boolean, onMore: () -> Unit,
     onPlay: (NexusCatalog.Item) -> Unit, onBack: () -> Unit,
     sortOrder: String, onSort: (String) -> Unit, onParental: () -> Unit,
@@ -43,6 +43,9 @@ internal fun NexusLiveScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     val history = remember(userId) { NexusWatchHistory(context, userId) }
     var recentIds by remember(userId) { mutableStateOf(emptyList<String>()) }
+    var recentChannels by remember(userId) { mutableStateOf(emptyList<NexusCatalog.Item>()) }
+    var recentLoading by remember(userId) { mutableStateOf(false) }
+    var recentError by remember(userId) { mutableStateOf<String?>(null) }
     var filter by remember { mutableStateOf("all") }
     var grid by remember { mutableStateOf(true) }
     var sortMenu by remember { mutableStateOf(false) }
@@ -54,6 +57,30 @@ internal fun NexusLiveScreen(
             clock = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date())
             kotlinx.coroutines.delay(1000)
         }
+    }
+    DisposableEffect(session, recentIds, filter) {
+        val alive = java.util.concurrent.atomic.AtomicBoolean(true)
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        var call: okhttp3.Call? = null
+        recentError = null
+        recentLoading = false
+        if (filter == "recent") {
+            recentChannels = emptyList()
+            if (recentIds.isNotEmpty()) {
+                recentLoading = true
+                // Fetch history by identity, independent of the current catalog page or category.
+                call = catalog.page(session, contentType = "live", ids = recentIds, pageSize = 100) { result ->
+                    handler.post {
+                        if (alive.get()) {
+                            recentLoading = false
+                            result.fold(onSuccess = { recentChannels = it },
+                                onFailure = { recentError = "Não foi possível carregar os assistidos recentemente." })
+                        }
+                    }
+                }
+            }
+        }
+        onDispose { alive.set(false); call?.cancel() }
     }
     BackHandler { if (expanded) onExpand() else onBack() }
     MaterialTheme(colorScheme = darkColorScheme(primary = LiveGold, onPrimary = Color.Black, surface = LivePanel, background = Color.Black)) {
@@ -119,25 +146,30 @@ internal fun NexusLiveScreen(
                             Text(if (editing) "Concluir" else "Editar favoritos", color = if (editing) LiveGold else Color.White, fontSize = 12.sp)
                         }
                     }
-                    val visible = channels.filter { when (filter) { "favorites" -> it.id in favorites; "recent" -> it.id in recentIds; else -> true } }
+                    val source = if (filter == "recent") recentChannels.filter { item ->
+                        (adultUnlocked || !item.adult) && item.title.contains(query.trim(), ignoreCase = true)
+                    } else channels
+                    val visible = source.filter { when (filter) { "favorites" -> it.id in favorites; "recent" -> it.id in recentIds; else -> true } }
                         .let { list -> if (filter == "recent") list.sortedBy { recentIds.indexOf(it.id) } else list }
-                    if (loading) LinearProgressIndicator(Modifier.fillMaxWidth(), color = LiveGold)
+                    val resultsLoading = if (filter == "recent") recentLoading else loading
+                    if (resultsLoading) LinearProgressIndicator(Modifier.fillMaxWidth(), color = LiveGold)
                     if (grid) {
                         LazyVerticalGrid(columns = GridCells.Fixed(4), modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             items(visible, key = { it.id }) { channel ->
                                 LiveChannel(channel, channel.id == selectedId, channel.id in favorites, false,
                                     { if (editing) onFavorite(channel) else onPlay(channel) }, { onFavorite(channel) })
                             }
-                            item { if (more && !loading) TextButton(onClick = onMore) { Text("Mais", fontSize = 11.sp) } }
+                            item { if (filter != "recent" && more && !loading) TextButton(onClick = onMore) { Text("Mais", fontSize = 11.sp) } }
                         }
                     } else LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         items(visible, key = { it.id }) { channel ->
                             LiveChannel(channel, channel.id == selectedId, channel.id in favorites, true,
                                 { if (editing) onFavorite(channel) else onPlay(channel) }, { onFavorite(channel) })
                         }
-                        item { if (more && !loading) TextButton(onClick = onMore) { Text("Carregar mais") } }
+                        item { if (filter != "recent" && more && !loading) TextButton(onClick = onMore) { Text("Carregar mais") } }
                     }
-                    if (visible.isEmpty() && !loading) Text("Nenhum canal encontrado.", color = Color.LightGray, fontSize = 12.sp)
+                    if (filter == "recent" && recentError != null) Text(recentError!!, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                    if (visible.isEmpty() && !resultsLoading && recentError == null) Text("Nenhum canal encontrado.", color = Color.LightGray, fontSize = 12.sp)
                 }
                 Column(Modifier.weight(0.30f).fillMaxHeight().background(Color(0xFF0C0C0C)).padding(10.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(clock, color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(top = 12.dp))

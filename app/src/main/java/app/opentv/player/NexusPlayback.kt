@@ -76,6 +76,7 @@ internal class NexusPlayback(
     private var pendingSeek: Long? = null
     private var waitingSince = System.currentTimeMillis()
     private var lastSample = -1L
+    private var primaryFailure: String? = null
     private var hasPlayed = false
     private var lastProgressReportAt = 0L
     private val tick = object : Runnable {
@@ -145,13 +146,14 @@ internal class NexusPlayback(
         if (released) return
         sample()
         if (!policy.next()) {
-            error = message
+            error = listOfNotNull(primaryFailure, message).distinct().joinToString("\n")
             buffering = false
             playing = false
             desiredPlay = false
             vlc?.pause()
             return
         }
+        primaryFailure = message
         ++generation // Ignore callbacks from the engine being torn down.
         exo?.release()
         exo = null
@@ -247,9 +249,9 @@ internal class NexusPlayback(
             videoTracks = v.videoTracks?.filter { it.id >= 0 }?.map { Track(it.id, it.name) }.orEmpty()
         }
         val now = System.currentTimeMillis()
-        if (hasPlayed && !live && position > 0 && now - lastProgressReportAt >= 5_000L) {
+        if (hasPlayed && (live || position > 0) && now - lastProgressReportAt >= 5_000L) {
             lastProgressReportAt = now
-            onProgress(position)
+            onProgress(if (live) 0L else position)
         }
     }
 
@@ -316,6 +318,7 @@ internal class NexusPlayback(
         policy = EngineFallback()
         engine = policy.engine
         error = null
+        primaryFailure = null
         desiredPlay = true
         startExo()
         surfaceRevision++
@@ -331,7 +334,7 @@ internal class NexusPlayback(
     fun release() {
         if (released) return
         sample()
-        if (hasPlayed && !live && position > 0) onProgress(position)
+        if (hasPlayed && (live || position > 0)) onProgress(if (live) 0L else position)
         released = true
         handler.removeCallbacksAndMessages(null)
         disposeEngines()
