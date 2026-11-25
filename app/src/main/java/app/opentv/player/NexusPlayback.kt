@@ -76,6 +76,7 @@ internal class NexusPlayback(
     private var pendingSeek: Long? = null
     private var waitingSince = System.currentTimeMillis()
     private var lastSample = -1L
+    private var primaryFailure: String? = null
     private var hasPlayed = false
     private var lastProgressReportAt = 0L
     private val tick = object : Runnable {
@@ -145,13 +146,14 @@ internal class NexusPlayback(
         if (released) return
         sample()
         if (!policy.next()) {
-            error = message
+            error = listOfNotNull(primaryFailure, message).distinct().joinToString("\n")
             buffering = false
             playing = false
             desiredPlay = false
             vlc?.pause()
             return
         }
+        primaryFailure = message
         ++generation // Ignore callbacks from the engine being torn down.
         exo?.release()
         exo = null
@@ -316,6 +318,7 @@ internal class NexusPlayback(
         policy = EngineFallback()
         engine = policy.engine
         error = null
+        primaryFailure = null
         desiredPlay = true
         startExo()
         surfaceRevision++
