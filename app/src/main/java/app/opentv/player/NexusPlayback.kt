@@ -249,9 +249,9 @@ internal class NexusPlayback(
             videoTracks = v.videoTracks?.filter { it.id >= 0 }?.map { Track(it.id, it.name) }.orEmpty()
         }
         val now = System.currentTimeMillis()
-        if (hasPlayed && !live && position > 0 && now - lastProgressReportAt >= 5_000L) {
+        if (hasPlayed && (live || position > 0) && now - lastProgressReportAt >= 5_000L) {
             lastProgressReportAt = now
-            onProgress(position)
+            onProgress(if (live) 0L else position)
         }
     }
 
@@ -334,7 +334,7 @@ internal class NexusPlayback(
     fun release() {
         if (released) return
         sample()
-        if (hasPlayed && !live && position > 0) onProgress(position)
+        if (hasPlayed && (live || position > 0)) onProgress(if (live) 0L else position)
         released = true
         handler.removeCallbacksAndMessages(null)
         disposeEngines()

@@ -58,6 +58,26 @@ class DualPlaybackTest {
         }
     }
 
+    @Test fun livePlaybackReportsHistoryOnlyAfterStarting() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            lateinit var session: NexusPlayback
+            var reported = false
+            scenario.onActivity { activity ->
+                val host = FrameLayout(activity)
+                activity.setContentView(host)
+                session = NexusPlayback(activity,
+                    "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8", 0, true) {
+                    assertEquals(0L, it)
+                    reported = true
+                }
+                assertFalse(reported)
+                host.addView(session.surface(), FrameLayout.LayoutParams(-1, 280))
+            }
+            try { await("Live playback recorded in history") { session.playing && reported } }
+            finally { main { session.release() } }
+        }
+    }
+
     private fun exercise(url: String) {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             lateinit var session: NexusPlayback

@@ -39,9 +39,12 @@ class NexusCatalog(
         })
     }
 
-    fun page(session: NexusAuth.Session, offset: Int = 0, contentType: String? = null, query: String = "", categoryId: String? = null, recentlyAdded: Boolean = false, pageSize: Int = 100, sortOrder: String = "az", seriesShows: Boolean = false, seriesTitle: String? = null, callback: (Result<List<Item>>) -> Unit): Call? {
+    fun page(session: NexusAuth.Session, offset: Int = 0, contentType: String? = null, query: String = "", categoryId: String? = null, recentlyAdded: Boolean = false, pageSize: Int = 100, sortOrder: String = "az", seriesShows: Boolean = false, seriesTitle: String? = null, ids: List<String>? = null, callback: (Result<List<Item>>) -> Unit): Call? {
         return try {
             require(offset >= 0 && pageSize in 1..1000)
+            require(ids == null || ids.size in 1..100 && ids.all { id ->
+                id.matches(Regex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"))
+            })
             val table = if (seriesShows) "series_catalog" else "channels"
             val base = (projectUrl.trimEnd('/') + "/rest/v1/" + table).toHttpUrl()
             require(base.isHttps)
@@ -52,6 +55,7 @@ class NexusCatalog(
                 .addQueryParameter("order", if (recentlyAdded) "created_at.desc,id.desc" else when (sortOrder) { "popular" -> if (seriesShows) "popularity_score.desc.nullslast,title.asc,id.asc" else "title.asc,id.asc"; "default" -> "source_position.asc.nullslast,created_at.asc,id.asc"; "za" -> "title.desc,id.desc"; else -> "title.asc,id.asc" })
                 .addQueryParameter("limit", pageSize.toString())
                 .addQueryParameter("offset", offset.toString())
+            ids?.let { builder.addQueryParameter("id", "in.(${it.joinToString(",")})") }
             seriesTitle?.let { builder.addQueryParameter("series_title", "eq.$it") }
             categoryId?.let { builder.addQueryParameter("category_id", "eq.$it") }
             contentType?.let { builder.addQueryParameter("content_kind", "eq.$it") }
